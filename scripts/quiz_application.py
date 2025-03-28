@@ -2,7 +2,7 @@ import psycopg2 as pg
 import random
 from config import config
 from psycopg2 import sql
-import matplotlib
+import matplotlib.pyplot as plt
 
 
 # Database connection settings
@@ -78,49 +78,61 @@ def show_topics(cursor):
 
 def delete_topic(cursor, conn):
     show_topics(cursor)
-    topic = input("Enter the topic name to delete: ")
+    topic = input("Enter the topic name to delete: ").lower()
+
+    cursor.execute("SELECT to_regclass(%s);", (topic,))
+    result = cursor.fetchone()
+
+    if result[0] is None:
+        print(f"Topic '{topic}' does not exist.")
+        return
+
     cursor.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE;").format(sql.Identifier(topic)))
     conn.commit()
     print(f"Topic '{topic}' deleted successfully.")
 
 
-
-def take_quiz(cursor):
+def take_quiz(cursor, conn):
     """
     Take a quiz.
 
     Args:
-        cursor (pg.cursor): Database cursor"
+        cursor (pg.cursor): Database cursor
+        conn (pg.connection): Database connection
     """
 
+    # Fetch available topics
     topics = get_topics(cursor)
     if not topics:
         print("No topics found. Please add some topics first.")
         return
+
     show_topics(cursor)
 
-
     try:
+        # Get user's topic choice
         choice = int(input("Select a topic number:")) - 1  # number of topics
         if 0 <= choice < len(topics):
             topic = topics[choice]
-            start_quiz(cursor, topic)
+            start_quiz(cursor, conn, topic)
         else:
             print("😔 Invalid topic number. Please try again.")
     except ValueError:
         print("Invalid selection. Please try again.")
 
 
-def start_quiz(cursor, topic):
+def start_quiz(cursor, conn, topic):
     """
     Fetches random questions from the selected topic, with a chosen
     difficulty level and starts the quiz.
 
     Args:
         cursor (pg.cursor): Database cursor
+        conn (pg.connection): Database connection
         topic (str): The name of the topic
     """
     try:
+        # Get difficulty level
         difficulty = int(input("Select difficulty level (1-Easy, 2-Medium, 3-Hard):"))
         if difficulty not in [1, 2, 3]:
             print("Invalid difficulty level. Defaulting to Easy.")
@@ -129,19 +141,24 @@ def start_quiz(cursor, topic):
         print("Invalid selection. Defaulting to Easy.")
         difficulty = 1
 
-    cursor.execute(sql.SQL("""
+    # Fetch questions from the database for the selected topic and difficulty level
+    cursor.execute("""
         SELECT question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3
-        FROM {}
+        FROM questions
+        JOIN topics ON topics.id = questions.topic_id
+        WHERE topics.topic_name = %s AND questions.difficulty = %s
         ORDER BY RANDOM()
         LIMIT 5;
-    """).format(sql.Identifier(topic)))
+    """, (topic, difficulty))
+
     questions = cursor.fetchall()
 
     if not questions:
-        print(f"No questions found for the '{topic}' topic ad difficulty level {difficulty}.")
+        print(f"No questions found for the '{topic}' topic at difficulty level {difficulty}.")
         return
 
     score = 0
+    # Loop through each question, display it and check the user's answer
     for question, correct, *wrong in questions:
         options = [correct] + [ans for ans in wrong if ans]
         random.shuffle(options)
@@ -151,6 +168,7 @@ def start_quiz(cursor, topic):
             print(f"{i}. {option}")
 
         try:
+            # Get user answer
             user_answer = int(input("Select the correct answer number:")) - 1
             if 0 <= user_answer < len(options) and options[user_answer] == correct:
                 print("Correct!")
@@ -160,7 +178,15 @@ def start_quiz(cursor, topic):
         except ValueError:
             print("Invalid selection. Skipping question.")
 
-    print(f"\nQuiz over! Your final score: {score}/{len(questions)}")        
+    print(f"\nQuiz over! Your final score: {score}/{len(questions)}")
+
+    # Get the user's name and store the score in the database
+    username = input("Enter your username: ")
+
+    cursor.execute("INSERT INTO scores (username, score) VALUES (%s, %s);", (username, score))
+    conn.commit()
+
+    print("Your score has been recorded successfully!")
 
 
 def add_question(cursor, conn):
@@ -206,6 +232,7 @@ def add_question(cursor, conn):
     conn.commit()
     print("👏🏼 Question added successfully!")
 
+
 def show_score():
     """
     Shows the user's score from the database.
@@ -223,28 +250,26 @@ def show_score():
         print(f"{idx}. {username}: {score}")    
 
 
-def show_best_scores_graph():
+def show_best_scores_graph(cursor):
     """
     Shows a graphical representation of the user's best scores.
-
     """
-    topics = ["Geography", "Science", "History", "Literature", "Languages"]
-    scores = [80, 90, 75, 80, 95]
-    plt.bar(topics, scores, color=["blue", "green", "red"])
-    plt.xlabel("Topics")
-    plt.ylabel("Scores")
-    plt.title("Best Quiz Scores by Topics")
-    plt.show()
-
-
-    cursor.execute("SELECT score FROM scores ORDER BY score DESC;")
-    scores = [score for _, score in cursor.fetchall()]
-
+    cursor.execute("SELECT username, score FROM scores ORDER BY score DESC LIMIT 5;")
+    scores = cursor.fetchall()
+    
     if not scores:
         print("No scores found.")
         return
 
-    print("\nBest Scores Graph:")
+    usernames = [user[0] for user in scores]
+    top_scores = [user[1] for user in scores]
+
+    plt.bar(usernames, top_scores, color="blue")
+    plt.xlabel("Username")
+    plt.ylabel("Score")
+    plt.title("Top 5 Quiz Scores")
+    plt.show()
+
 
 def main():
     """
@@ -272,7 +297,7 @@ def main():
         elif choice == "5":
             show_score()
         elif choice == "6":
-            show_best_scores_graph()
+            show_best_scores_graph(cursor)
         elif choice == "7":
             print("🚪 Exiting ... Goodbye!")
             break
