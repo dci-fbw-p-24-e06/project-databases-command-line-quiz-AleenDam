@@ -2,6 +2,7 @@ import psycopg2 as pg
 import random
 from config import config
 
+
 # Database connection settings
 def connect_db():
     """
@@ -34,7 +35,7 @@ def show_menu():
     print("6. Exit")
 
 
-def get_topics():
+def get_topics(cursor):
     """
     Retrieves a list of available topics from the database.
 
@@ -45,11 +46,7 @@ def get_topics():
         list: A list of available topic names.
     """
 
-    conn, cursor = connect_db()
-    if conn is None:
-        return []
-
-    cursor.execute("SELECT name FROM topics")
+    cursor.execute("SELECT topic_name FROM topics")
     """
     SELECT table_name FROM information_schema.tables
     WHERE table_schema = 'public'
@@ -57,6 +54,7 @@ def get_topics():
     rows = cursor.fetchall()
     # conn.close
     return [row[0] for row in rows]
+
 
 
 def take_quiz(cursor):
