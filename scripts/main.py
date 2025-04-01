@@ -29,6 +29,7 @@ def validate_difficulty():
         return None
     return int(difficulty_level)
 
+
 def take_quiz(logged_in_user):
     """Function to take the quiz."""
     topics = get_topics()
@@ -63,11 +64,18 @@ def take_quiz(logged_in_user):
 
     score = 0
     asked_questions = set()
+    rounds = 0
+    total_rounds = 10  # Set the total number of rounds you want
 
-    for question in questions:
+    while rounds < total_rounds:
+        # Shuffle questions if necessary to avoid repetition
+        random.shuffle(questions)
+        
+        question = questions[rounds % len(questions)]  # Ensuring it doesn't go out of index range
         if question[0] in asked_questions:
             continue
         
+        print(f"\nRound {rounds + 1}:")
         print(f"Question: {question[0]}")
         answers = [question[1], question[2], question[3], question[4], question[5], question[6]]
         random.shuffle(answers)
@@ -83,9 +91,11 @@ def take_quiz(logged_in_user):
             print("❌ Invalid input. Please enter a valid number.")
         
         asked_questions.add(question[0])
-    
-    print(f"\nYour final score: {score}/{len(questions)}")
+        rounds += 1
+
+    print(f"\nYour final score after {total_rounds} rounds: {score}/{total_rounds}")
     save_score(logged_in_user, topic, score)
+
 
 def view_user_scores(logged_in_user):
     """Displays all saved scores and plots a graph for the user's strongest topics."""
@@ -136,6 +146,22 @@ def login():
     else:
         print("❌ Invalid username or password.")
         return None
+    
+
+
+def authenticate_user(username, password):
+    """Mock function to authenticate a user."""
+    # This can be replaced with a database lookup or any other authentication mechanism
+    users_db = {
+        "aleen": "777",  # Username: Password pair for mock authentication
+        "john": "1234"
+    }
+    
+    if username in users_db and users_db[username] == password:
+        return True
+    return False
+
+# Your other functions (validate_question_data, show_menu, etc.) remain unchanged.
 
 def main():
     """Main function for handling user interaction."""
@@ -199,3 +225,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

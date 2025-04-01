@@ -2,9 +2,19 @@ import psycopg2 as pg
 from psycopg2 import sql
 from config import config
 
+
 def connect_db():
     """Establish a connection to the PostgreSQL database."""
     return pg.connect(**config)
+
+
+def validate_question_data(question_data):
+    """Ensure each question has exactly seven elements: one question and six answers."""
+    if len(question_data) != 7:
+        print(f"❌ Invalid number of elements in question_data: {question_data}")
+        return False
+    return True
+
 
 def create_initial_tables():
     """Creates initial tables for topics, questions, and scores if they don't exist."""
@@ -15,7 +25,8 @@ def create_initial_tables():
             CREATE TABLE IF NOT EXISTS topics (
                 topic_name TEXT PRIMARY KEY
             );
-        """)
+        """
+        )
         
         # Create scores table with 'topic_name' column directly
         cursor.execute("""
@@ -26,59 +37,32 @@ def create_initial_tables():
                 score INT NOT NULL,
                 FOREIGN KEY (topic_name) REFERENCES topics(topic_name) ON DELETE CASCADE
             );
-        """)
+        """
+        )
         
-        # Create sample tables for each topic dynamically (languages, history, literature)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS languages (
-                id SERIAL PRIMARY KEY,
-                module TEXT NOT NULL,
-                submodule TEXT NOT NULL,
-                difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
-                question TEXT NOT NULL,
-                correct_answer TEXT NOT NULL,
-                wrong_answer1 TEXT NOT NULL,
-                wrong_answer2 TEXT NOT NULL,
-                wrong_answer3 TEXT,
-                wrong_answer4 TEXT,
-                wrong_answer5 TEXT
-            );
-        """)
+        # Create dynamic topic tables
+        topics = ["languages", "history", "literature"]
+        for topic in topics:
+            cursor.execute(sql.SQL("""
+                CREATE TABLE IF NOT EXISTS {} (
+                    id SERIAL PRIMARY KEY,
+                    module TEXT NOT NULL,
+                    submodule TEXT NOT NULL,
+                    difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
+                    question TEXT NOT NULL,
+                    correct_answer TEXT NOT NULL,
+                    wrong_answer1 TEXT NOT NULL,
+                    wrong_answer2 TEXT NOT NULL,
+                    wrong_answer3 TEXT,
+                    wrong_answer4 TEXT,
+                    wrong_answer5 TEXT
+                );
+            """
+            ).format(sql.Identifier(topic)))
         
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS history (
-                id SERIAL PRIMARY KEY,
-                module TEXT NOT NULL,
-                submodule TEXT NOT NULL,
-                difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
-                question TEXT NOT NULL,
-                correct_answer TEXT NOT NULL,
-                wrong_answer1 TEXT NOT NULL,
-                wrong_answer2 TEXT NOT NULL,
-                wrong_answer3 TEXT,
-                wrong_answer4 TEXT,
-                wrong_answer5 TEXT
-            );
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS literature (
-                id SERIAL PRIMARY KEY,
-                module TEXT NOT NULL,
-                submodule TEXT NOT NULL,
-                difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
-                question TEXT NOT NULL,
-                correct_answer TEXT NOT NULL,
-                wrong_answer1 TEXT NOT NULL,
-                wrong_answer2 TEXT NOT NULL,
-                wrong_answer3 TEXT,
-                wrong_answer4 TEXT,
-                wrong_answer5 TEXT
-            );
-        """)
-
         conn.commit()
     conn.close()
+
 
 def get_topics():
     """Fetches all available topics from the database."""
@@ -89,15 +73,17 @@ def get_topics():
     conn.close()
     return topics
 
+
 def get_questions(topic, limit=5):
     """Fetches random questions for a given topic."""
     conn = connect_db()
     with conn.cursor() as cursor:
         cursor.execute(sql.SQL("SELECT question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5 FROM {} ORDER BY RANDOM() LIMIT %s;").format(
-            sql.Identifier(topic)), [limit])  # Correct way to pass parameters in SQL query
+            sql.Identifier(topic)), [limit])
         questions = cursor.fetchall()
     conn.close()
     return questions
+
 
 def save_score(username, topic, score):
     """Saves the user's score into the database."""
@@ -109,6 +95,32 @@ def save_score(username, topic, score):
         """, (username, topic, score))
         conn.commit()
     conn.close()
+
+
+# Assuming you have a function to fetch scores from the database or data store
+def view_scores(user):
+    """Fetch the average scores for a user across topics."""
+    try:
+        connection = connect_db()
+        cursor = connection.cursor()
+        
+        # SQL query to fetch average score by topic for the user
+        cursor.execute("""
+            SELECT topic_name, AVG(score) as avg_score
+            FROM scores
+            WHERE user = %s
+            GROUP BY topic_name
+            ORDER BY avg_score DESC
+        """, (user,))
+        
+        scores = cursor.fetchall()  # Fetch all rows
+        connection.close()
+        
+        return scores if scores else None  # Return None if no scores found
+    except Exception as e:
+        print(f"❌ Error fetching scores: {e}")
+        return None
+
 
 def add_topic(topic_name):
     """Adds a new topic to the database."""
@@ -140,64 +152,29 @@ def add_topic(topic_name):
             print(f"✅ Topic '{topic_name}' added successfully!")
     conn.close()
 
+
 def add_question(topic, module, submodule, difficulty, question, correct_answer, wrong_answers):
     """Adds a question to an existing topic."""
+    question_data = (question, correct_answer, *wrong_answers)
+    if not validate_question_data(question_data):
+        return
+    
     conn = connect_db()
     with conn.cursor() as cursor:
         cursor.execute(sql.SQL("""
             INSERT INTO {} (module, submodule, difficulty, question, correct_answer, 
-            wrong_answer1, wrong_answer2, wrong_answer3) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+            wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
         ).format(sql.Identifier(topic)),
-        (module, submodule, difficulty, question, correct_answer, *wrong_answers))
+        (module, submodule, difficulty, *question_data))
         conn.commit()
         print("✅ Question added successfully!")
     conn.close()
 
-def create_user(username, password):
-    """Creates a new user with the provided username and password."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
-        if cursor.fetchone():
-            print("❌ User already exists.")
-        else:
-            cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password))
-            conn.commit()
-            print(f"✅ User '{username}' created successfully!")
-    conn.close()
-
-def authenticate_user(username, password):
-    """Authenticates a user based on username and password."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
-        stored_password = cursor.fetchone()
-    conn.close()
-
-    if stored_password and stored_password[0] == password:
-        return True
-    return False
-
-def view_scores(username):
-    """Fetches and displays the user's scores."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("""
-            SELECT topic_name, AVG(score) AS average_score
-            FROM scores
-            WHERE username = %s
-            GROUP BY topic_name;
-        """, (username,))
-        scores = cursor.fetchall()
-    conn.close()
-    return scores
-
 
 def add_hardcoded_questions():
     """Populates the topics tables with hardcoded questions and answers."""
-    # Define the hardcoded questions for each topic
     topics_data = {
         "languages": [
             ("What is the official language of Brazil?", "Portuguese", "Spanish", "French", "English", "Italian", "German"),
@@ -225,24 +202,15 @@ def add_hardcoded_questions():
     conn = connect_db()
     with conn.cursor() as cursor:
         for topic, questions in topics_data.items():
-            # First, add the topic to the 'topics' table
             cursor.execute("INSERT INTO topics (topic_name) VALUES (%s) ON CONFLICT (topic_name) DO NOTHING;", (topic,))
-            
-            # Now add the questions for each topic
             for question_data in questions:
-                # Debug: Print the question_data to check its size
-                print(f"question_data: {question_data}")
-
-                # Ensure there are exactly 7 elements in the question_data tuple
-                if len(question_data) != 7:
-                    print(f"❌ Invalid number of elements in question_data: {question_data}")
-                    continue  # Skip this question if it doesn't have 7 elements
-                
-                question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5 = question_data
+                if not validate_question_data(question_data):
+                    continue
                 cursor.execute(sql.SQL("""
                     INSERT INTO {} (question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5)
                     VALUES (%s, %s, %s, %s, %s, %s, %s);
-                """).format(sql.Identifier(topic)), (question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5))
+                """
+                ).format(sql.Identifier(topic)), question_data)
             conn.commit()
     conn.close()
     print("✅ Hardcoded questions added successfully!")
