@@ -17,9 +17,12 @@ def show_menu():
     print("3. Add a question to an existing topic")
     print("4. View all topics")
     print("5. Delete a topic")
-    print("6. View scores")
-    print("7. Logout")
-    print("8. Exit")
+    print("6. View your scores")
+    print("7. Change user (logout & login)")
+    print("8. Show scores of all users")
+    print("9. Show the winner")
+    print("10. Exit")
+
 
 def validate_difficulty():
     """Validates the difficulty level input."""
@@ -77,15 +80,14 @@ def take_quiz(logged_in_user):
         if question[0] in asked_questions:
             continue
 
-        print(f"\nRound {rounds + 1}")
-        print(f"Question: {question[0]}")
-
         all_answers = list(filter(None, question[1:7]))
 
         if len(all_answers) < 2:
             print("⚠️ Skipping malformed question.")
             continue
 
+        print(f"\nRound {rounds + 1}")
+        print(f"Question: {question[0]}")
         random.shuffle(all_answers)
 
         for i, ans in enumerate(all_answers):
@@ -109,10 +111,19 @@ def take_quiz(logged_in_user):
         asked_questions.add(question[0])
         rounds += 1
 
-    print(f"\nYour final score after {total_rounds} rounds: {score}/{total_rounds}")
+    print(f"\nYour final score after {rounds} round{'s' if rounds != 1 else ''}: {score}/{rounds}")
     save_score(logged_in_user, topic, score)
 
 
+def view_topics():
+    """Displays all available topics in the database."""
+    topics = get_topics()  # Reusing the get_topics function to fetch topics
+    if topics:
+        print("Available Topics:")
+        for idx, topic in enumerate(topics, start=1):
+            print(f"{idx}. {topic.capitalize()}")
+    else:
+        print("❌ No topics found.")
 
 def view_user_scores(logged_in_user):
     """Displays all saved scores and plots a graph for the user's strongest topics."""
@@ -235,6 +246,26 @@ def authenticate_user(username, password):
         return True
     return False
 
+def show_all_user_scores():
+    """Display average scores of all users."""
+    all_scores = get_all_user_scores()  # This should return a list of (username, topic, avg_score)
+    if not all_scores:
+        print("No user scores available.")
+        return
+    
+    print("\n=== All User Scores ===")
+    for username, topic, avg in all_scores:
+        print(f"{username.capitalize()} | Topic: {topic.capitalize()} | Avg Score: {avg:.2f}")
+
+def show_winner():
+    """Display the user with the highest average score."""
+    winner_data = get_top_user()
+    if winner_data:
+        username, avg_score = winner_data
+        print(f"🏆 Winner: {username.capitalize()} with an average score of {avg_score:.2f}")
+    else:
+        print("No scores found to determine a winner.")
+
 
 def main():
     """Main function for handling user interaction."""
@@ -277,29 +308,34 @@ def main():
         elif choice == "3":
             topic = input("Enter topic name: ").strip()
             if topic:
-                module = input("Enter module: ").strip()
-                submodule = input("Enter submodule: ").strip()
                 difficulty = validate_difficulty()
                 if difficulty:
                     question = input("Enter the question: ").strip()
                     correct_answer = input("Enter correct answer: ").strip()
                     wrong_answers = [input(f"Enter wrong answer {i+1}: ").strip() for i in range(3)]
-                    add_question(topic, module, submodule, difficulty, question, correct_answer, wrong_answers)
+                    add_question(topic, difficulty, question, correct_answer, wrong_answers)
         elif choice == "4":
-            topics = get_topics()
+            view_topics()
+            '''topics = get_topics()
             if topics:
                 print("\nTopics:", ", ".join(topics))
             else:
-                print("❌ No topics available.")
+                print("❌ No topics available.")'''
         elif choice == "5":
             delete_existing_topic()
         elif choice == "6":
             view_user_scores(logged_in_user)
         elif choice == "7":
-            print("Logging out...")
+            print("🔁 Logging out and switching user...")
             logged_in_user = None
+            while logged_in_user is None:
+                logged_in_user = login()
         elif choice == "8":
-            print("Exiting...")
+            show_all_user_scores()
+        elif choice == "9":
+            show_winner()
+        elif choice == "10":
+            print("👋 Exiting...")
             break
         else:
             print("❌ Invalid choice, try again.")

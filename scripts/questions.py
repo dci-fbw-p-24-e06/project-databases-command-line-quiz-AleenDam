@@ -53,10 +53,14 @@ def create_initial_tables():
             );
         """)
         
-        topics = ["Languages", "History", "Literature", "General Knowledge", "Geography"]
+        topics = ["languages", "history", "literature", "general_knowledge", "geography"]
         for topic in topics:
+            # Drop the topic table if it exists
+            cursor.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE;").format(sql.Identifier(topic)))
+            
+            # Recreate the topic table
             cursor.execute(sql.SQL("""
-                CREATE TABLE IF NOT EXISTS {} (
+                CREATE TABLE {} (
                     id SERIAL PRIMARY KEY,
                     difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
                     question TEXT NOT NULL,
@@ -67,9 +71,13 @@ def create_initial_tables():
                     wrong_answer4 TEXT
                 );
             """).format(sql.Identifier(topic)))
+
         
-        conn.commit()
+    conn.commit()
     conn.close()
+    
+    # Populate tables with hardcoded questions
+    add_hardcoded_questions()
 
 
 def get_topics():
@@ -85,32 +93,17 @@ def get_topics():
     conn.close()
 
     # List of known topics in lowercase
-    known_topics = ['languages', 'history', 'literature', 'general knowledge', 'geography']
+    known_topics = ['languages', 'history', 'literature', 'general_knowledge', 'geography']
 
     topics = []
     for topic in topics_from_db:
         topic_name = topic[0].strip().lower()  # Strip any extra spaces and convert to lowercase
-        print(f"Fetched from DB: {topic_name}")  # Debugging print statement
 
         if topic_name in known_topics:
             # Capitalize for proper display
             topics.append(topic_name.title())  # `title()` capitalizes each word in multi-word topics
 
-    print(f"Filtered topics: {topics}")  # Debugging print statement
     return topics
-
-
-
-
-def view_topics():
-    """Displays all available topics in the database."""
-    topics = get_topics()  # Reusing the get_topics function to fetch topics
-    if topics:
-        print("Available Topics:")
-        for idx, topic in enumerate(topics, start=1):
-            print(f"{idx}. {topic.capitalize()}")
-    else:
-        print("❌ No topics found.")
 
 
 def add_topic(topic_name):
@@ -132,8 +125,7 @@ def add_topic(topic_name):
                     wrong_answer1 TEXT NOT NULL,
                     wrong_answer2 TEXT NOT NULL,
                     wrong_answer3 TEXT,
-                    wrong_answer4 TEXT,
-                    wrong_answer5 TEXT
+                    wrong_answer4 TEXT
                 );
             """).format(sql.Identifier(topic_name)))
             conn.commit()
@@ -143,11 +135,11 @@ def add_topic(topic_name):
 
 # Question management functions
 def validate_question_data(question_data):
-    """Ensure each question has exactly seven elements: one question and six answers."""
-    if len(question_data) != 7:
-        print(f"❌ Invalid number of elements in question_data: {question_data}")
+    """Ensure each question has exactly seven elements: one question and five answers."""
+    if not isinstance(question_data, tuple) or len(question_data) != 7:
+        print(f"❌ Invalid question data: {question_data}")
         return False
-    return True
+
 
 
 def get_questions(topic, difficulty):
@@ -169,7 +161,6 @@ def get_questions(topic, difficulty):
     return questions
 
 
-
 def add_question(topic, difficulty, question, correct_answer, wrong_answers):
     """Adds a question to an existing topic."""
     question_data = (question, correct_answer, *wrong_answers)
@@ -180,8 +171,8 @@ def add_question(topic, difficulty, question, correct_answer, wrong_answers):
     with conn.cursor() as cursor:
         cursor.execute(sql.SQL("""
             INSERT INTO {} (difficulty, question, correct_answer, 
-            wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+            wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s);
         """).format(sql.Identifier(topic)),
         (difficulty, *question_data))
         conn.commit()
@@ -223,6 +214,45 @@ def view_scores(user):
     except Exception as e:
         print(f"❌ Error fetching scores: {e}")
         return None
+
+def get_all_user_scores():
+    conn = connect_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT username, topic_name, AVG(score)::numeric(5,2) AS average_score
+        FROM scores
+        GROUP BY username, topic_name
+        ORDER BY average_score DESC;
+    """)
+
+    results = cur.fetchall()
+
+    cur.close()
+    conn.close()
+
+    return results
+
+def get_top_user():
+    conn = connect_db()
+    cur = conn.cursor()
+
+    # Query to get the user with the highest average score
+    cur.execute("""
+        SELECT username, AVG(score)::numeric(5,2) AS avg_score
+        FROM scores
+        GROUP BY username
+        ORDER BY avg_score DESC
+        LIMIT 1;
+    """)
+
+    winner = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    return winner
+
 
 
 # Topic validation function
@@ -267,7 +297,7 @@ def create_topic_table(topic):
 def add_hardcoded_questions():
     """Populates the topics tables with hardcoded questions and answers."""
     topics_data = {
-        "Languages": [
+        "languages": [
             (1, "What is the official language of Brazil?", "Portuguese", "Spanish", "French", "English", "Brazilian"),
             (1, "Which language is spoken in Japan?", "Japanese", "Chinese", "Korean", "Vietnamese", "Tagalog"),
             (1, "Which language is widely spoken in India?", "Hindi", "Bengali", "Marathi", "Gujarati", "Punjabi"),
@@ -278,7 +308,7 @@ def add_hardcoded_questions():
             (3, "Which language is primarily spoken in Iceland?", "Icelandic", "Norwegian", "Danish", "Swedish", "Finnish"),
             (3, "Which language is spoken in Finland?", "Finnish", "Swedish", "Norwegian", "Danish", "Estonian")
         ],
-        "History": [
+        "history": [
             (1, "Who was the first president of the United States?", "George Washington", "Abraham Lincoln", "Thomas Jefferson", "Andrew Jackson", "John Adams"),
             (1, "Who was the first emperor of Rome?", "Augustus", "Julius Caesar", "Nero", "Tiberius", "Caligula"),
             (2, "In which year did World War II end?", "1945", "1939", "1918", "1965", "1950"),
@@ -288,7 +318,7 @@ def add_hardcoded_questions():
             (3, "Who was the first president of South Africa?", "Nelson Mandela", "Thabo Mbeki", "Jacob Zuma", "F.W. de Klerk", "Hendrik Verwoerd"),
             (3, "In which year did the Titanic sink?", "1912", "1905", "1898", "1923", "1910")
         ],
-        "Literature": [
+        "literature": [
             (1, "Who wrote 'To Kill a Mockingbird'?", "Harper Lee", "Mark Twain", "Jane Austen", "F. Scott Fitzgerald", "J.K. Rowling"),
             (1, "Which novel features the character of Sherlock Holmes?", "The Hound of the Baskervilles", "The Great Gatsby", "Pride and Prejudice", "Moby Dick", "1984"),
             (1, "Who wrote '1984'?", "George Orwell", "Aldous Huxley", "J.K. Rowling", "Charles Dickens", "Ernest Hemingway"),
@@ -299,7 +329,7 @@ def add_hardcoded_questions():
             (3, "Which novel is set during the time of the American Civil War?", "Gone with the Wind", "Moby Dick", "Pride and Prejudice", "War and Peace", "The Scarlet Letter"),
             (3, "Who wrote 'Crime and Punishment'?", "Fyodor Dostoevsky", "Leo Tolstoy", "Anton Chekhov", "Vladimir Nabokov", "Alexander Pushkin")
         ],
-        "General Knowledge": [
+        "general_knowledge": [
             (1, "What is the capital of France?", "Paris", "London", "Berlin", "Madrid", "Rome"),
             (1, "Which planet is known as the Red Planet?", "Mars", "Venus", "Earth", "Jupiter", "Saturn"),
             (1, "What is the largest ocean on Earth?", "Pacific Ocean", "Atlantic Ocean", "Indian Ocean", "Southern Ocean", "Arctic Ocean"),
@@ -310,7 +340,7 @@ def add_hardcoded_questions():
             (3, "Which company created the first personal computer?", "Apple", "IBM", "Microsoft", "Compaq", "HP"),
             (3, "What year did the first manned mission to Mars occur?", "Not yet", "2025", "2030", "2020", "2040")
         ],
-        "Geography": [
+        "geography": [
             (1, "What is the largest continent?", "Asia", "Africa", "Europe", "North America", "Australia"),
             (1, "Which country has the most population?", "China", "India", "USA", "Indonesia", "Brazil"),
             (1, "Which country is known as the Land of the Rising Sun?", "Japan", "South Korea", "China", "Thailand", "India"),
