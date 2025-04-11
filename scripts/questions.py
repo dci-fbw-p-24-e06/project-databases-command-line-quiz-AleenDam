@@ -3,32 +3,46 @@ from psycopg2 import sql
 from config import config
 
 
+# Database connection functions
 def connect_db():
     """Establish a connection to the PostgreSQL database."""
     return pg.connect(**config)
 
 
-def validate_question_data(question_data):
-    """Ensure each question has exactly seven elements: one question and six answers."""
-    if len(question_data) != 7:
-        print(f"❌ Invalid number of elements in question_data: {question_data}")
-        return False
-    return True
+# User management functions
+def create_user_account():
+    """Registers a new user account in the PostgreSQL database."""
+    username = input("Choose a username: ").strip()
+
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
+        if cursor.fetchone():
+            print("❌ Username already exists. Please choose a different one.")
+            conn.close()
+            return None  # Optionally, return None to allow retry
+
+        password = input("Choose a password: ").strip()
+
+        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password))
+        conn.commit()
+        print(f"✅ User '{username}' registered successfully!")
+    
+    conn.close()
+    return username
 
 
+# Topic management functions
 def create_initial_tables():
     """Creates initial tables for topics, questions, and scores if they don't exist."""
     conn = connect_db()
     with conn.cursor() as cursor:
-        # Create topics table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS topics (
                 topic_name TEXT PRIMARY KEY
             );
-        """
-        )
+        """)
         
-        # Create scores table with 'topic_name' column directly
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scores (
                 id SERIAL PRIMARY KEY,
@@ -37,89 +51,66 @@ def create_initial_tables():
                 score INT NOT NULL,
                 FOREIGN KEY (topic_name) REFERENCES topics(topic_name) ON DELETE CASCADE
             );
-        """
-        )
+        """)
         
-        # Create dynamic topic tables
-        topics = ["languages", "history", "literature"]
+        topics = ["Languages", "History", "Literature", "General Knowledge", "Geography"]
         for topic in topics:
             cursor.execute(sql.SQL("""
                 CREATE TABLE IF NOT EXISTS {} (
                     id SERIAL PRIMARY KEY,
-                    module TEXT NOT NULL,
-                    submodule TEXT NOT NULL,
                     difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
                     question TEXT NOT NULL,
                     correct_answer TEXT NOT NULL,
                     wrong_answer1 TEXT NOT NULL,
                     wrong_answer2 TEXT NOT NULL,
                     wrong_answer3 TEXT,
-                    wrong_answer4 TEXT,
-                    wrong_answer5 TEXT
+                    wrong_answer4 TEXT
                 );
-            """
-            ).format(sql.Identifier(topic)))
+            """).format(sql.Identifier(topic)))
         
         conn.commit()
     conn.close()
 
 
 def get_topics():
-    """Fetches all available topics from the database."""
+    """Fetches all available topics from the database and filters with known topics."""
     conn = connect_db()
     with conn.cursor() as cursor:
-        cursor.execute("SELECT topic_name FROM topics;")
-        topics = [row[0] for row in cursor.fetchall()]
+        cursor.execute("""
+            SELECT topic_name
+            FROM topics
+        """)
+        topics_from_db = cursor.fetchall()
+
     conn.close()
+
+    # List of known topics in lowercase
+    known_topics = ['languages', 'history', 'literature', 'general knowledge', 'geography']
+
+    topics = []
+    for topic in topics_from_db:
+        topic_name = topic[0].strip().lower()  # Strip any extra spaces and convert to lowercase
+        print(f"Fetched from DB: {topic_name}")  # Debugging print statement
+
+        if topic_name in known_topics:
+            # Capitalize for proper display
+            topics.append(topic_name.title())  # `title()` capitalizes each word in multi-word topics
+
+    print(f"Filtered topics: {topics}")  # Debugging print statement
     return topics
 
 
-def get_questions(topic, limit=5):
-    """Fetches random questions for a given topic."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute(sql.SQL("SELECT question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5 FROM {} ORDER BY RANDOM() LIMIT %s;").format(
-            sql.Identifier(topic)), [limit])
-        questions = cursor.fetchall()
-    conn.close()
-    return questions
 
 
-def save_score(username, topic, score):
-    """Saves the user's score into the database."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("""
-            INSERT INTO scores (username, topic_name, score) 
-            VALUES (%s, %s, %s);
-        """, (username, topic, score))
-        conn.commit()
-    conn.close()
-
-
-# Assuming you have a function to fetch scores from the database or data store
-def view_scores(user):
-    """Fetch the average scores for a user across topics."""
-    try:
-        connection = connect_db()
-        cursor = connection.cursor()
-        
-        # SQL query to fetch average score by topic for the user
-        cursor.execute("""
-            SELECT topic_name, AVG(score) as avg_score
-            FROM scores
-            WHERE user = %s
-            GROUP BY topic_name
-            ORDER BY avg_score DESC
-        """, (user,))
-        
-        scores = cursor.fetchall()  # Fetch all rows
-        connection.close()
-        
-        return scores if scores else None  # Return None if no scores found
-    except Exception as e:
-        print(f"❌ Error fetching scores: {e}")
-        return None
+def view_topics():
+    """Displays all available topics in the database."""
+    topics = get_topics()  # Reusing the get_topics function to fetch topics
+    if topics:
+        print("Available Topics:")
+        for idx, topic in enumerate(topics, start=1):
+            print(f"{idx}. {topic.capitalize()}")
+    else:
+        print("❌ No topics found.")
 
 
 def add_topic(topic_name):
@@ -135,8 +126,6 @@ def add_topic(topic_name):
             cursor.execute(sql.SQL("""
                 CREATE TABLE IF NOT EXISTS {} (
                     id SERIAL PRIMARY KEY,
-                    module TEXT NOT NULL,
-                    submodule TEXT NOT NULL,
                     difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
                     question TEXT NOT NULL,
                     correct_answer TEXT NOT NULL,
@@ -146,14 +135,42 @@ def add_topic(topic_name):
                     wrong_answer4 TEXT,
                     wrong_answer5 TEXT
                 );
-            """
-            ).format(sql.Identifier(topic_name)))
+            """).format(sql.Identifier(topic_name)))
             conn.commit()
             print(f"✅ Topic '{topic_name}' added successfully!")
     conn.close()
 
 
-def add_question(topic, module, submodule, difficulty, question, correct_answer, wrong_answers):
+# Question management functions
+def validate_question_data(question_data):
+    """Ensure each question has exactly seven elements: one question and six answers."""
+    if len(question_data) != 7:
+        print(f"❌ Invalid number of elements in question_data: {question_data}")
+        return False
+    return True
+
+
+def get_questions(topic, difficulty):
+    """Fetches questions from the selected topic and difficulty level."""
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute(sql.SQL("""
+            SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
+                   wrong_answer3, wrong_answer4
+            FROM {} 
+            WHERE difficulty = %s
+            ORDER BY RANDOM()
+            LIMIT 10;
+        """).format(sql.Identifier(topic)), (difficulty,))
+        questions = cursor.fetchall()
+
+    conn.close()
+
+    return questions
+
+
+
+def add_question(topic, difficulty, question, correct_answer, wrong_answers):
     """Adds a question to an existing topic."""
     question_data = (question, correct_answer, *wrong_answers)
     if not validate_question_data(question_data):
@@ -162,55 +179,173 @@ def add_question(topic, module, submodule, difficulty, question, correct_answer,
     conn = connect_db()
     with conn.cursor() as cursor:
         cursor.execute(sql.SQL("""
-            INSERT INTO {} (module, submodule, difficulty, question, correct_answer, 
+            INSERT INTO {} (difficulty, question, correct_answer, 
             wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-        """
-        ).format(sql.Identifier(topic)),
-        (module, submodule, difficulty, *question_data))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        """).format(sql.Identifier(topic)),
+        (difficulty, *question_data))
         conn.commit()
         print("✅ Question added successfully!")
     conn.close()
 
 
+# Score management functions
+def save_score(username, topic, score):
+    """Saves the user's score into the database."""
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            INSERT INTO scores (username, topic_name, score) 
+            VALUES (%s, %s, %s);
+        """, (username, topic, score))
+        conn.commit()
+    conn.close()
+
+
+def view_scores(user):
+    """Fetch the average scores for a user across topics."""
+    try:
+        connection = connect_db()
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            SELECT topic_name, AVG(score) as avg_score
+            FROM scores
+            WHERE username = %s
+            GROUP BY topic_name
+            ORDER BY avg_score DESC
+        """, (user,))
+        
+        scores = cursor.fetchall()
+        connection.close()
+        
+        return scores if scores else None
+    except Exception as e:
+        print(f"❌ Error fetching scores: {e}")
+        return None
+
+
+# Topic validation function
+def validate_topic_table(topic):
+    """Validate that a table has the correct structure for a quiz topic."""
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = %s;
+        """, (topic,))
+        columns = [row[0] for row in cursor.fetchall()]
+    
+    conn.close()
+
+    required_columns = {'difficulty', 'question', 'correct_answer', 'wrong_answer1', 'wrong_answer2', 'wrong_answer3', 'wrong_answer4'}
+    return required_columns.issubset(columns)
+
+
+# Hardcoded question population functions
+
+def create_topic_table(topic):
+    """Creates a table for a given topic with the necessary structure."""
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute(sql.SQL("""
+            CREATE TABLE IF NOT EXISTS {} (
+                id SERIAL PRIMARY KEY,
+                difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
+                question TEXT NOT NULL,
+                correct_answer TEXT NOT NULL,
+                wrong_answer1 TEXT NOT NULL,
+                wrong_answer2 TEXT NOT NULL,
+                wrong_answer3 TEXT,
+                wrong_answer4 TEXT
+            );
+        """).format(sql.Identifier(topic)))
+        conn.commit()
+    conn.close()
+
 def add_hardcoded_questions():
     """Populates the topics tables with hardcoded questions and answers."""
     topics_data = {
-        "languages": [
-            ("What is the official language of Brazil?", "Portuguese", "Spanish", "French", "English", "Italian", "German"),
-            ("Which language is spoken in Japan?", "Japanese", "Chinese", "Korean", "Vietnamese", "Mandarin", "Thai", ""),
-            ("Which language is widely spoken in India?", "Hindi", "Bengali", "Marathi", "Gujarati", "Punjabi", "Tamil", ""),
-            ("What is the official language of the United Kingdom?", "English", "Welsh", "Scots Gaelic", "French", "Dutch", "German", ""),
-            ("Which language is primarily spoken in Brazil?", "Portuguese", "Spanish", "French", "Italian", "English", "Dutch", "German")
+        "Languages": [
+            (1, "What is the official language of Brazil?", "Portuguese", "Spanish", "French", "English", "Brazilian"),
+            (1, "Which language is spoken in Japan?", "Japanese", "Chinese", "Korean", "Vietnamese", "Tagalog"),
+            (1, "Which language is widely spoken in India?", "Hindi", "Bengali", "Marathi", "Gujarati", "Punjabi"),
+            (2, "What is the official language of the United Kingdom?", "English", "Welsh", "Scots Gaelic", "Dutch", "French"),
+            (2, "Which language is primarily spoken in Columbia?", "Spanish", "Portuguese", "Italian", "English", "Dutch"),
+            (2, "What is the official language of Argentina?", "Spanish", "Portuguese", "English", "Italian", "German"),
+            (3, "Which language is spoken in Brazil and parts of the Caribbean?", "Portuguese", "Spanish", "French", "Italian", "Dutch"),
+            (3, "Which language is primarily spoken in Iceland?", "Icelandic", "Norwegian", "Danish", "Swedish", "Finnish"),
+            (3, "Which language is spoken in Finland?", "Finnish", "Swedish", "Norwegian", "Danish", "Estonian")
         ],
-        "history": [
-            ("Who was the first president of the United States?", "George Washington", "Abraham Lincoln", "Thomas Jefferson", "Andrew Jackson", "John Adams", ""),
-            ("In which year did World War II end?", "1945", "1939", "1918", "1965", "1950", ""),
-            ("Who discovered America?", "Christopher Columbus", "Vasco da Gama", "Marco Polo", "Ferdinand Magellan", "Amerigo Vespucci", ""),
-            ("Who was the first man to walk on the moon?", "Neil Armstrong", "Buzz Aldrin", "Yuri Gagarin", "Michael Collins", "John Glenn", ""),
-            ("Which country was formerly known as Persia?", "Iran", "Iraq", "Afghanistan", "Syria", "Turkey", "")
+        "History": [
+            (1, "Who was the first president of the United States?", "George Washington", "Abraham Lincoln", "Thomas Jefferson", "Andrew Jackson", "John Adams"),
+            (1, "Who was the first emperor of Rome?", "Augustus", "Julius Caesar", "Nero", "Tiberius", "Caligula"),
+            (2, "In which year did World War II end?", "1945", "1939", "1918", "1965", "1950"),
+            (2, "Who discovered America?", "Christopher Columbus", "Vasco da Gama", "Marco Polo", "Ferdinand Magellan", "Amerigo Vespucci"),
+            (2, "Who was the first man to walk on the moon?", "Neil Armstrong", "Buzz Aldrin", "Yuri Gagarin", "Michael Collins", "John Glenn"),
+            (3, "Which country was formerly known as Persia?", "Iran", "Iraq", "Afghanistan", "Syria", "Turkey"),
+            (3, "Who was the first president of South Africa?", "Nelson Mandela", "Thabo Mbeki", "Jacob Zuma", "F.W. de Klerk", "Hendrik Verwoerd"),
+            (3, "In which year did the Titanic sink?", "1912", "1905", "1898", "1923", "1910")
         ],
-        "literature": [
-            ("Who wrote '1984'?", "George Orwell", "Aldous Huxley", "Ray Bradbury", "Ernest Hemingway", "Mark Twain", ""),
-            ("Which book starts with the phrase 'Call me Ishmael'?", "Moby-Dick", "The Great Gatsby", "Pride and Prejudice", "To Kill a Mockingbird", "The Catcher in the Rye", ""),
-            ("Who is the author of 'Romeo and Juliet'?", "William Shakespeare", "Jane Austen", "Charles Dickens", "Leo Tolstoy", "Homer", ""),
-            ("Who wrote 'War and Peace'?", "Leo Tolstoy", "Fyodor Dostoevsky", "Anton Chekhov", "Ivan Turgenev", "Victor Hugo", ""),
-            ("What is the first book in the 'Harry Potter' series?", "Harry Potter and the Sorcerer's Stone", "Harry Potter and the Chamber of Secrets", "Harry Potter and the Prisoner of Azkaban", "Harry Potter and the Goblet of Fire", "Harry Potter and the Order of the Phoenix", "")
+        "Literature": [
+            (1, "Who wrote 'To Kill a Mockingbird'?", "Harper Lee", "Mark Twain", "Jane Austen", "F. Scott Fitzgerald", "J.K. Rowling"),
+            (1, "Which novel features the character of Sherlock Holmes?", "The Hound of the Baskervilles", "The Great Gatsby", "Pride and Prejudice", "Moby Dick", "1984"),
+            (1, "Who wrote '1984'?", "George Orwell", "Aldous Huxley", "J.K. Rowling", "Charles Dickens", "Ernest Hemingway"),
+            (2, "In which year was 'Harry Potter and the Sorcerer's Stone' published?", "1997", "1995", "2000", "1999", "2005"),
+            (2, "Who is the author of 'The Catcher in the Rye'?", "J.D. Salinger", "Ernest Hemingway", "F. Scott Fitzgerald", "Mark Twain", "John Steinbeck"),
+            (2, "Who wrote 'The Great Gatsby'?", "F. Scott Fitzgerald", "Ernest Hemingway", "J.D. Salinger", "Mark Twain", "Charles Dickens"),
+            (3, "Who wrote 'One Hundred Years of Solitude'?", "Gabriel García Márquez", "Isabel Allende", "Mario Vargas Llosa", "Carlos Fuentes", "Jorge Luis Borges"),
+            (3, "Which novel is set during the time of the American Civil War?", "Gone with the Wind", "Moby Dick", "Pride and Prejudice", "War and Peace", "The Scarlet Letter"),
+            (3, "Who wrote 'Crime and Punishment'?", "Fyodor Dostoevsky", "Leo Tolstoy", "Anton Chekhov", "Vladimir Nabokov", "Alexander Pushkin")
+        ],
+        "General Knowledge": [
+            (1, "What is the capital of France?", "Paris", "London", "Berlin", "Madrid", "Rome"),
+            (1, "Which planet is known as the Red Planet?", "Mars", "Venus", "Earth", "Jupiter", "Saturn"),
+            (1, "What is the largest ocean on Earth?", "Pacific Ocean", "Atlantic Ocean", "Indian Ocean", "Southern Ocean", "Arctic Ocean"),
+            (2, "Who invented the telephone?", "Alexander Graham Bell", "Thomas Edison", "Nikola Tesla", "Albert Einstein", "Benjamin Franklin"),
+            (2, "What is the smallest country in the world?", "Vatican City", "Monaco", "San Marino", "Liechtenstein", "Nauru"),
+            (2, "What is the largest island in the world?", "Greenland", "Australia", "New Guinea", "Borneo", "Madagascar"),
+            (3, "Which inventor is known for creating the first successful airplane?", "Wright Brothers", "Alexander Graham Bell", "Thomas Edison", "Nikola Tesla", "Elon Musk"),
+            (3, "Which company created the first personal computer?", "Apple", "IBM", "Microsoft", "Compaq", "HP"),
+            (3, "What year did the first manned mission to Mars occur?", "Not yet", "2025", "2030", "2020", "2040")
+        ],
+        "Geography": [
+            (1, "What is the largest continent?", "Asia", "Africa", "Europe", "North America", "Australia"),
+            (1, "Which country has the most population?", "China", "India", "USA", "Indonesia", "Brazil"),
+            (1, "Which country is known as the Land of the Rising Sun?", "Japan", "South Korea", "China", "Thailand", "India"),
+            (2, "What is the longest river in the world?", "Nile River", "Amazon River", "Yangtze River", "Mississippi River", "Ganges River"),
+            (2, "What is the largest desert in the world?", "Sahara Desert", "Gobi Desert", "Kalahari Desert", "Arabian Desert", "Atacama Desert"),
+            (2, "Which is the smallest country in Asia?", "Maldives", "Singapore", "Bhutan", "Nepal", "Sri Lanka"),
+            (3, "Which is the largest country by area?", "Russia", "Canada", "United States", "China", "Brazil"),
+            (3, "Which country is the largest producer of coffee?", "Brazil", "Vietnam", "Colombia", "Indonesia", "Ethiopia"),
+            (3, "Which country is known for the ancient pyramids?", "Egypt", "Mexico", "Peru", "India", "China")
         ]
     }
 
     conn = connect_db()
     with conn.cursor() as cursor:
         for topic, questions in topics_data.items():
-            cursor.execute("INSERT INTO topics (topic_name) VALUES (%s) ON CONFLICT (topic_name) DO NOTHING;", (topic,))
-            for question_data in questions:
-                if not validate_question_data(question_data):
-                    continue
-                cursor.execute(sql.SQL("""
-                    INSERT INTO {} (question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4, wrong_answer5)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s);
-                """
-                ).format(sql.Identifier(topic)), question_data)
-            conn.commit()
+            # Create the table for the topic if it doesn't exist
+            create_topic_table(topic)
+
+            # Insert the questions into the topic table
+            for question in questions:
+                # Ensure the question has 7 elements before inserting
+                if len(question) == 7:
+                    cursor.execute(sql.SQL("""
+                        INSERT INTO {} (difficulty, question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    """).format(sql.Identifier(topic)), question)
+                else:
+                    print(f"❌ Invalid question data: {question} for topic: {topic}")
+
+    conn.commit()
+    print("✅ Hardcoded topics and questions added successfully!")
     conn.close()
-    print("✅ Hardcoded questions added successfully!")
+
+
+
+
+
+

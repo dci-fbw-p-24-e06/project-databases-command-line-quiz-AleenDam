@@ -40,7 +40,7 @@ def take_quiz(logged_in_user):
 
     print("\nAvailable topics:")
     for index, topic in enumerate(topics, 1):
-        print(f"{index}. {topic}")
+        print(f"{index}. {topic.capitalize()}")
 
     try:
         topic_choice = int(input("Select a topic (enter number): ")) - 1
@@ -57,44 +57,61 @@ def take_quiz(logged_in_user):
         return
 
     questions = get_questions(topic, difficulty_level)
-    
+
     if not questions:
         print(f"❌ No questions available for the topic '{topic}' with difficulty level {difficulty_level}.")
         return
 
-    score = 0
     asked_questions = set()
+    score = 0
     rounds = 0
-    total_rounds = 10  # Set the total number of rounds you want
+    total_rounds = min(10, len(questions))
 
-    while rounds < total_rounds:
-        # Shuffle questions if necessary to avoid repetition
-        random.shuffle(questions)
-        
-        question = questions[rounds % len(questions)]  # Ensuring it doesn't go out of index range
+    random.shuffle(questions)
+    index = 0
+
+    while rounds < total_rounds and index < len(questions):
+        question = questions[index]
+        index += 1
+
         if question[0] in asked_questions:
             continue
-        
-        print(f"\nRound {rounds + 1}:")
+
+        print(f"\nRound {rounds + 1}")
         print(f"Question: {question[0]}")
-        answers = [question[1], question[2], question[3], question[4], question[5], question[6]]
-        random.shuffle(answers)
-        print("\n".join(f"{i+1}. {ans}" for i, ans in enumerate(answers)))
-        
+
+        all_answers = list(filter(None, question[1:7]))
+
+        if len(all_answers) < 2:
+            print("⚠️ Skipping malformed question.")
+            continue
+
+        random.shuffle(all_answers)
+
+        for i, ans in enumerate(all_answers):
+            print(f"{i + 1}. {ans}")
+
         try:
-            answer = int(input("\nEnter your answer: ")) - 1
-            if 0 <= answer < len(answers) and answers[answer] == question[1]:
-                score += 1
+            user_input = input("\nEnter your answer: ").strip()
+            answer_index = int(user_input) - 1
+
+            if 0 <= answer_index < len(all_answers):
+                if all_answers[answer_index] == question[1]:
+                    print("✅ Correct!")
+                    score += 1
+                else:
+                    print(f"❌ Incorrect. The correct answer was: {question[1]}")
             else:
-                print("❌ Incorrect answer.")
+                print("❌ Choice out of range.")
         except ValueError:
             print("❌ Invalid input. Please enter a valid number.")
-        
+
         asked_questions.add(question[0])
         rounds += 1
 
     print(f"\nYour final score after {total_rounds} rounds: {score}/{total_rounds}")
     save_score(logged_in_user, topic, score)
+
 
 
 def view_user_scores(logged_in_user):
@@ -134,6 +151,63 @@ def delete_existing_topic():
 
     delete_topic(topic_name)
     print(f"✅ Topic '{topic_name}' deleted successfully.")
+
+def display_topics():
+    """Displays available topics for the user to choose from."""
+    topics = get_topics()
+    if not topics:
+        print("No topics available!")
+        return None
+    
+    print("Available topics:")
+    for idx, topic in enumerate(topics, start=1):
+        print(f"{idx}. {topic.capitalize()}")
+
+    try:
+        topic_number = int(input("Select a topic (enter number): "))
+        if topic_number < 1 or topic_number > len(topics):
+            print("Invalid choice. Please select a valid number.")
+            return None
+        return topics[topic_number - 1]
+    except ValueError:
+        print("Please enter a valid number.")
+        return None
+
+def display_questions(topic):
+    """Displays questions from the selected topic."""
+    try:
+        num_questions = int(input("How many questions would you like to answer? "))
+        if num_questions <= 0:
+            print("Please enter a positive number of questions.")
+            return
+    except ValueError:
+        print("Please enter a valid number.")
+        return
+
+    # Fetch random questions for the selected topic
+    questions = get_questions(topic, limit=num_questions)
+    
+    if not questions:
+        print("No questions available for this topic.")
+        return
+
+    # Display questions and answers
+    for idx, (question, correct_answer, *wrong_answers) in enumerate(questions, start=1):
+        print(f"\nQuestion {idx}: {question}")
+        choices = [correct_answer] + wrong_answers
+        random.shuffle(choices)  # Shuffle answer choices
+        for i, choice in enumerate(choices, start=1):
+            print(f"{i}. {choice}")
+
+        # Accept answer from the user
+        try:
+            answer = int(input(f"Your answer (1-{len(choices)}): "))
+            if choices[answer - 1] == correct_answer:
+                print("Correct!")
+            else:
+                print(f"Wrong! The correct answer was: {correct_answer}")
+        except (ValueError, IndexError):
+            print("Invalid answer selection.")    
     
 def login():
     """Handles user login."""
@@ -161,7 +235,6 @@ def authenticate_user(username, password):
         return True
     return False
 
-# Your other functions (validate_question_data, show_menu, etc.) remain unchanged.
 
 def main():
     """Main function for handling user interaction."""
@@ -179,9 +252,17 @@ def main():
         if choice == "1":
             logged_in_user = login()
         elif choice == "2":
-            logged_in_user = create_user_account()
+            # Register a new user
+            username = create_user_account()
+            if username:
+                print(f"Welcome {username}!")
+            else:
+                print("Registration failed. Try again.")
+        elif choice == "1":
+            print("Login functionality coming soon...")
+            # Implement login logic here if needed
         else:
-            print("❌ Invalid option. Please select 1 to login or 2 to register.")
+            print("Invalid choice. Please select 1 or 2.")
 
     while logged_in_user:
         show_menu()
