@@ -84,7 +84,6 @@ def add_new_question():
 
 
 
-
 def view_all_topics():
     """Fetch and display all topics from the database in a user-friendly format."""
     topic_mapping = get_topics()
@@ -95,6 +94,8 @@ def view_all_topics():
         print("Available topics:")
         for index, (display_name, raw_name) in enumerate(topic_mapping.items(), 1):
             print(f"{index}. {display_name}")
+    
+    return topic_mapping  # Return the topics mapping
 
 def delete_topic():
     """Deletes a topic from the database."""
@@ -172,3 +173,40 @@ def show_winner():
     else:
         print("No scores found to determine a winner.")
 
+
+def display_questions():
+    """Display all questions from a topic selected by the user."""
+    # Fetch all topics
+    topic_mapping = get_topics()
+
+    if not topic_mapping:
+        print("No topics available.")
+        return
+
+    # Display available topics
+    print("Available topics:")
+    for index, (display_name, raw_name) in enumerate(topic_mapping.items(), 1):
+        print(f"{index}. {display_name}")
+
+    # Let the user choose a topic
+    try:
+        topic_choice = int(input("\nEnter the number of the topic you want to view questions from: "))
+        if topic_choice < 1 or topic_choice > len(topic_mapping):
+            print("Invalid topic selection.")
+            return
+
+        # Fetch the raw name of the selected topic
+        selected_topic = list(topic_mapping.values())[topic_choice - 1]
+
+        # Fetch questions for the selected topic (no difficulty passed)
+        questions = get_questions(selected_topic)
+
+        if not questions:
+            print(f"No questions found for the topic '{selected_topic}'.")
+        else:
+            print(f"\nDisplaying questions from the topic '{selected_topic}':")
+            for idx, question in enumerate(questions, 1):
+                print(f"Q{idx}: {question[0]}")  # Only display the question (no answers)
+                print("-" * 40)  # Separator between questions
+    except ValueError:
+        print("Invalid input. Please enter a valid number.")

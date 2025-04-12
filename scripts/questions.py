@@ -154,26 +154,35 @@ def add_topic(topic_name):
         conn.close()
 
 
-def get_questions(topic, difficulty):
-    """Fetches questions from the selected topic and difficulty level."""
+def get_questions(topic, difficulty=None):
+    """Fetches all questions from the selected topic and optional difficulty."""
     # Convert topic to lowercase and replace spaces with underscores for table naming
     table_name = topic.lower().replace(" ", "_")
 
     conn = connect_db()
     with conn.cursor() as cursor:
-        cursor.execute(sql.SQL("""
-            SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
-                   wrong_answer3, wrong_answer4
-            FROM {table} 
-            WHERE difficulty = %s
-            ORDER BY RANDOM()
-            LIMIT 10;
-        """).format(table=sql.Identifier(table_name)), (difficulty,))
+        if difficulty:
+            cursor.execute(sql.SQL("""
+                SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
+                       wrong_answer3, wrong_answer4
+                FROM {table}
+                WHERE difficulty = %s
+                ORDER BY RANDOM();  -- Shuffle questions
+            """).format(table=sql.Identifier(table_name)), (difficulty,))
+        else:
+            cursor.execute(sql.SQL("""
+                SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
+                       wrong_answer3, wrong_answer4
+                FROM {table}
+                ORDER BY RANDOM();  -- Shuffle questions
+            """).format(table=sql.Identifier(table_name)))
+        
         questions = cursor.fetchall()
 
     conn.close()
 
     return questions
+
 
 
 def validate_question_data(question_data):

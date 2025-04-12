@@ -1,7 +1,6 @@
 from auth import login, create_user_account, change_user
 from quiz_functions import *
 
-
 def show_menu():
     """Displays the main menu options."""
     print("\n=== Quiz Application ===")
@@ -9,6 +8,7 @@ def show_menu():
     print("2. Add new questions")
     print("3. View all topics")
     print("4. Delete topics")
+    print("5. Display questions from a topic")  # New option
     print("6. Change user")
     print("7. My scores")
     print("8. Show all users scores")
@@ -53,6 +53,8 @@ def main():
             view_all_topics()  # Call the function to view topics
         elif choice == "4":
             delete_topic()  # Delete topic logic
+        elif choice == "5":
+            display_questions()
         elif choice == "6":
             logged_in_user = change_user()  # Logic for changing user
         elif choice == "7":
@@ -69,4 +71,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
