@@ -108,14 +108,20 @@ def get_topics():
 
 def add_topic(topic_name):
     """Adds a new topic to the database."""
+    topic_name = topic_name.strip().lower().replace(" ", "_")  # Normalize topic name
+
     conn = connect_db()
     with conn.cursor() as cursor:
+        # Check if the topic already exists
         cursor.execute("SELECT topic_name FROM topics WHERE topic_name = %s", (topic_name,))
         if cursor.fetchone():
             print("❌ Topic already exists.")
         else:
+            # Insert the topic into the 'topics' table
             cursor.execute("INSERT INTO topics (topic_name) VALUES (%s)", (topic_name,))
             conn.commit()
+
+            # Create a table for the topic with the normalized topic name
             cursor.execute(sql.SQL("""
                 CREATE TABLE IF NOT EXISTS {} (
                     id SERIAL PRIMARY KEY,
@@ -131,14 +137,6 @@ def add_topic(topic_name):
             conn.commit()
             print(f"✅ Topic '{topic_name}' added successfully!")
     conn.close()
-
-
-# Question management functions
-def validate_question_data(question_data):
-    """Ensure each question has exactly seven elements: one question and five answers."""
-    if not isinstance(question_data, tuple) or len(question_data) != 7:
-        print(f"❌ Invalid question data: {question_data}")
-        return False
 
 
 
@@ -163,10 +161,14 @@ def get_questions(topic, difficulty):
 
 def add_question(topic, difficulty, question, correct_answer, wrong_answers):
     """Adds a question to an existing topic."""
-    question_data = (question, correct_answer, *wrong_answers)
-    if not validate_question_data(question_data):
-        return
+    # Convert question_data to a list so it can be modified (e.g., adding empty wrong answers)
+    question_data = [question, correct_answer, *wrong_answers]  # Prepare data as a list
     
+    # Validate the question data
+    if not validate_question_data(question_data):
+        return  # Return if the data is invalid
+    
+    # Database connection and insertion
     conn = connect_db()
     with conn.cursor() as cursor:
         cursor.execute(sql.SQL("""
@@ -174,11 +176,58 @@ def add_question(topic, difficulty, question, correct_answer, wrong_answers):
             wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4) 
             VALUES (%s, %s, %s, %s, %s, %s, %s);
         """).format(sql.Identifier(topic)),
-        (difficulty, *question_data))
+        (difficulty, *question_data))  # Insert the question using unpacked list data
         conn.commit()
         print("✅ Question added successfully!")
     conn.close()
 
+
+def validate_question_data(question_data):
+    """Validates the question data format before inserting into the database."""
+    
+    # Ensure there are at least 5 elements (question, correct answer, and 4 wrong answers)
+    if len(question_data) < 5:
+        print(f"❌ Invalid question data: {question_data}. Expected 5 elements (question, correct answer, and at least 3 wrong answers).")
+        return False
+
+    # Add empty strings for any missing wrong answers
+    while len(question_data) < 6:
+        question_data.append('')  # Add empty string for any missing wrong answer
+    
+    # Unpack the values
+    question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4 = question_data
+
+    # Check if any field is empty
+    if not question or not correct_answer or not wrong_answer1 or not wrong_answer2 or not wrong_answer3 or not wrong_answer4:
+        print(f"❌ Invalid question data: {question_data}")
+        return False
+
+    # Check if question is not too long or too short (optional, just an example)
+    if len(question) > 255 or len(correct_answer) > 255 or len(wrong_answer1) > 255:
+        print(f"❌ Invalid question data: {question_data}")
+        return False
+
+    return True
+
+
+def delete_topic(topic_name):
+    """Deletes the topic from the topics table and drops the corresponding topic table."""
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        try:
+            # Delete from the topics list
+            cursor.execute("DELETE FROM topics WHERE topic_name = %s", (topic_name.lower(),))
+
+            # Drop the topic table (assumes table name = topic_name.lower())
+            table_name = topic_name.lower()
+            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"❌ Error deleting topic: {e}")
+        finally:
+            conn.close()
 
 # Score management functions
 def save_score(username, topic, score):

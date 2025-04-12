@@ -13,15 +13,14 @@ def show_menu():
     """Displays the main menu options."""
     print("\n=== Quiz Application ===")
     print("1. Take a quiz")
-    print("2. Add a new topic")
-    print("3. Add a question to an existing topic")
-    print("4. View all topics")
-    print("5. Delete a topic")
-    print("6. View your scores")
-    print("7. Change user (logout & login)")
-    print("8. Show scores of all users")
-    print("9. Show the winner")
-    print("10. Exit")
+    print("2. Add new questions")
+    print("3. View all topics")
+    print("4. Manage topics")
+    print("5. View your scores")
+    print("6. Change user")
+    print("7. Show all scores")
+    print("8. Who is the winner")
+    print("9. Exit")
 
 
 def validate_difficulty():
@@ -151,17 +150,20 @@ def view_user_scores(logged_in_user):
 
 def delete_existing_topic():
     """Deletes an existing topic."""
-    topic_name = input("Enter the topic name to delete: ").strip()
+    topic_name = input("Enter the topic name to delete: ").strip().lower()
     if not topic_name:
         print("❌ Topic name cannot be empty.")
         return
-    
-    if topic_name not in get_topics():
+
+    available_topics = [t.lower() for t in get_topics()]  # normalize for comparison
+
+    if topic_name not in available_topics:
         print("❌ Topic not found.")
         return
 
     delete_topic(topic_name)
     print(f"✅ Topic '{topic_name}' deleted successfully.")
+
 
 def display_topics():
     """Displays available topics for the user to choose from."""
@@ -239,7 +241,8 @@ def authenticate_user(username, password):
     # This can be replaced with a database lookup or any other authentication mechanism
     users_db = {
         "aleen": "777",  # Username: Password pair for mock authentication
-        "john": "1234"
+        "john": "123",
+        "julian": "111"
     }
     
     if username in users_db and users_db[username] == password:
@@ -289,9 +292,6 @@ def main():
                 print(f"Welcome {username}!")
             else:
                 print("Registration failed. Try again.")
-        elif choice == "1":
-            print("Login functionality coming soon...")
-            # Implement login logic here if needed
         else:
             print("Invalid choice. Please select 1 or 2.")
 
@@ -301,40 +301,73 @@ def main():
 
         if choice == "1":
             take_quiz(logged_in_user)
+
         elif choice == "2":
-            topic_name = input("Enter topic name: ").strip()
-            if topic_name:
-                add_topic(topic_name)
-        elif choice == "3":
-            topic = input("Enter topic name: ").strip()
-            if topic:
-                difficulty = validate_difficulty()
-                if difficulty:
-                    question = input("Enter the question: ").strip()
-                    correct_answer = input("Enter correct answer: ").strip()
-                    wrong_answers = [input(f"Enter wrong answer {i+1}: ").strip() for i in range(3)]
-                    add_question(topic, difficulty, question, correct_answer, wrong_answers)
-        elif choice == "4":
-            view_topics()
-            '''topics = get_topics()
+            topics = get_topics()
+
+            print("\nAvailable Topics:")
             if topics:
-                print("\nTopics:", ", ".join(topics))
+                for i, t in enumerate(topics, 1):
+                    print(f"{i}. {t.replace('_', ' ').title()}")
             else:
-                print("❌ No topics available.")'''
-        elif choice == "5":
+                print("⚠️ No topics available yet.")
+
+            choice = input("Do you want to choose from existing topics or create a new one? (choose/create): ").strip().lower()
+
+            if choice == "choose":
+                topic_name = input("Enter the topic name for the question: ").strip().lower()
+
+                if topic_name not in [t.lower() for t in topics]:
+                    print(f"❌ '{topic_name}' topic does not exist.")
+                    continue
+            elif choice == "create":
+                topic_name = input("Enter the new topic name: ").strip().lower()
+                add_topic(topic_name)  # Adds the new topic
+            else:
+                print("❌ Invalid choice. Please enter 'choose' or 'create'.")
+                continue
+
+
+            difficulty = validate_difficulty()
+            if difficulty:
+                question = input("Enter the question: ").strip()
+                correct_answer = input("Enter correct answer: ").strip()
+                
+                # Collect 3 wrong answers, and add an empty string if fewer than 4 are provided
+                wrong_answers = []
+                for i in range(4):
+                    wrong_answer = input(f"Enter wrong answer {i + 1}: ").strip()
+                    wrong_answers.append(wrong_answer)
+
+                # Append an empty string if only 3 answers are provided
+                if len(wrong_answers) < 4:
+                    wrong_answers.append('')
+
+                add_question(topic_name, difficulty, question, correct_answer, wrong_answers)
+
+        elif choice == "3":
+            view_topics()
+
+        elif choice == "4":
             delete_existing_topic()
-        elif choice == "6":
+
+        elif choice == "5":
             view_user_scores(logged_in_user)
-        elif choice == "7":
+
+        elif choice == "6":
             print("🔁 Logging out and switching user...")
             logged_in_user = None
             while logged_in_user is None:
                 logged_in_user = login()
-        elif choice == "8":
+
+        elif choice == "7":
             show_all_user_scores()
-        elif choice == "9":
+
+        elif choice == "8":
+
             show_winner()
-        elif choice == "10":
+
+        elif choice == "9":
             print("👋 Exiting...")
             break
         else:
@@ -342,4 +375,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
