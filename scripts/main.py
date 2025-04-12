@@ -223,31 +223,45 @@ def display_questions(topic):
             print("Invalid answer selection.")    
     
 def login():
-    """Handles user login."""
+    """Handles user login or registration."""
     username = input("Enter username: ").strip()
-    password = input("Enter password: ").strip()
     
-    if authenticate_user(username, password):
-        print("✅ Login successful!")
-        return username
+    # Check if user exists in the PostgreSQL database
+    if user_exists(username):
+        password = input("Enter password: ").strip()
+        conn = connect_db()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+            db_password = cursor.fetchone()
+
+            # If the password matches
+            if db_password and db_password[0] == password:
+                print("✅ Login successful!")
+                return username
+            else:
+                print("❌ Invalid password.")
+                return None
     else:
-        print("❌ Invalid username or password.")
-        return None
-    
+        # If user doesn't exist, ask if they want to register
+        register = input(f"User '{username}' does not exist. Would you like to register? (y/n): ").strip().lower()
+        if register == 'y':
+            return create_user_account(username)  # Proceed to registration
+        else:
+            print("❌ Login failed. User not found.")
+            return None
 
 
-def authenticate_user(username, password):
-    """Mock function to authenticate a user."""
-    # This can be replaced with a database lookup or any other authentication mechanism
-    users_db = {
-        "aleen": "777",  # Username: Password pair for mock authentication
-        "john": "123",
-        "julian": "111"
-    }
+
+
+def register_user(username):
+    """Registers a new user by adding them to the mock database."""
+    password = input(f"Enter password for new user '{username}': ").strip()
     
-    if username in users_db and users_db[username] == password:
-        return True
-    return False
+    # Add the new user to the mock users_db
+    users_db[username] = password
+    print(f"✅ User '{username}' registered successfully!")
+    return username
+
 
 def show_all_user_scores():
     """Display average scores of all users."""

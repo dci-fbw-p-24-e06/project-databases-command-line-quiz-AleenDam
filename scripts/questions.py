@@ -10,9 +10,19 @@ def connect_db():
 
 
 # User management functions
-def create_user_account():
+def user_exists(username):
+    """Checks if a user exists in the PostgreSQL database."""
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
+        result = cursor.fetchone()
+
+    conn.close()
+    return result is not None  # Return True if user exists, otherwise False
+
+def create_user_account(username):
     """Registers a new user account in the PostgreSQL database."""
-    username = input("Choose a username: ").strip()
+    password = input(f"Create a password for '{username}': ").strip()
 
     conn = connect_db()
     with conn.cursor() as cursor:
@@ -22,14 +32,14 @@ def create_user_account():
             conn.close()
             return None  # Optionally, return None to allow retry
 
-        password = input("Choose a password: ").strip()
-
+        # Insert the new user into the users table
         cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password))
         conn.commit()
         print(f"✅ User '{username}' registered successfully!")
     
     conn.close()
-    return username
+    return username  # Return the username to log them in after registration
+
 
 
 # Topic management functions
@@ -81,7 +91,7 @@ def create_initial_tables():
 
 
 def get_topics():
-    """Fetches all available topics from the database and filters with known topics."""
+    """Fetches all available topics from the database."""
     conn = connect_db()
     with conn.cursor() as cursor:
         cursor.execute("""
@@ -92,33 +102,25 @@ def get_topics():
 
     conn.close()
 
-    # List of known topics in lowercase
-    known_topics = ['languages', 'history', 'literature', 'general_knowledge', 'geography']
-
-    topics = []
-    for topic in topics_from_db:
-        topic_name = topic[0].strip().lower()  # Strip any extra spaces and convert to lowercase
-
-        if topic_name in known_topics:
-            # Capitalize for proper display
-            topics.append(topic_name.title())  # `title()` capitalizes each word in multi-word topics
-
+    # Return all topics from the database, formatted for display
+    topics = [topic[0].replace("_", " ").title() for topic in topics_from_db]
+    
     return topics
 
 
 def add_topic(topic_name):
     """Adds a new topic to the database."""
-    topic_name = topic_name.strip().lower().replace(" ", "_")  # Normalize topic name
+    topic_name_normalized = topic_name.strip().lower().replace(" ", "_")  # Normalize topic name
 
     conn = connect_db()
     with conn.cursor() as cursor:
         # Check if the topic already exists
-        cursor.execute("SELECT topic_name FROM topics WHERE topic_name = %s", (topic_name,))
+        cursor.execute("SELECT topic_name FROM topics WHERE topic_name = %s", (topic_name_normalized,))
         if cursor.fetchone():
             print("❌ Topic already exists.")
         else:
             # Insert the topic into the 'topics' table
-            cursor.execute("INSERT INTO topics (topic_name) VALUES (%s)", (topic_name,))
+            cursor.execute("INSERT INTO topics (topic_name) VALUES (%s)", (topic_name_normalized,))
             conn.commit()
 
             # Create a table for the topic with the normalized topic name
@@ -133,11 +135,11 @@ def add_topic(topic_name):
                     wrong_answer3 TEXT,
                     wrong_answer4 TEXT
                 );
-            """).format(sql.Identifier(topic_name)))
+            """).format(sql.Identifier(topic_name_normalized)))
             conn.commit()
+
             print(f"✅ Topic '{topic_name}' added successfully!")
     conn.close()
-
 
 
 def get_questions(topic, difficulty):
@@ -210,24 +212,33 @@ def validate_question_data(question_data):
     return True
 
 
-def delete_topic(topic_name):
-    """Deletes the topic from the topics table and drops the corresponding topic table."""
+def get_topics():
+    """Fetches all available topics from the database and filters with known topics."""
     conn = connect_db()
     with conn.cursor() as cursor:
-        try:
-            # Delete from the topics list
-            cursor.execute("DELETE FROM topics WHERE topic_name = %s", (topic_name.lower(),))
+        cursor.execute("""
+            SELECT topic_name
+            FROM topics
+        """)
+        topics_from_db = cursor.fetchall()
 
-            # Drop the topic table (assumes table name = topic_name.lower())
-            table_name = topic_name.lower()
-            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+    conn.close()
 
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            print(f"❌ Error deleting topic: {e}")
-        finally:
-            conn.close()
+    # List of known topics in lowercase
+    known_topics = ['languages', 'history', 'literature', 'general_knowledge', 'geography']
+
+    topics = []
+    for topic in topics_from_db:
+        topic_name = topic[0].strip().lower()  # Strip any extra spaces and convert to lowercase
+
+        if topic_name in known_topics:
+            # Capitalize for proper display
+            topics.append(topic_name.title())  # `title()` capitalizes each word in multi-word topics
+
+    return topics
+
+
+
 
 # Score management functions
 def save_score(username, topic, score):
