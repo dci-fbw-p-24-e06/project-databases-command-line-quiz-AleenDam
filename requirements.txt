@@ -1,2 +1,48 @@
 psycopg2
 matplotlib
+
+
+SELECT question, COUNT(*)
+FROM languages
+GROUP BY question
+HAVING COUNT(*) > 1;
+
+WITH duplicates AS (
+  SELECT MIN(id) as keep_id, question
+  FROM languages
+  GROUP BY question
+  HAVING COUNT(*) > 1
+)
+DELETE FROM languages
+WHERE id NOT IN (SELECT keep_id FROM duplicates)
+AND question IN (SELECT question FROM duplicates);
+
+SELECT question, COUNT(*)
+FROM history
+GROUP BY question
+HAVING COUNT(*) > 1;
+
+WITH duplicates AS (
+  SELECT MIN(id) as keep_id, question
+  FROM history
+  GROUP BY question
+  HAVING COUNT(*) > 1
+)
+DELETE FROM history
+WHERE id NOT IN (SELECT keep_id FROM duplicates)
+AND question IN (SELECT question FROM duplicates);
+
+SELECT question, COUNT(*)
+FROM literature
+GROUP BY question
+HAVING COUNT(*) > 1;
+
+WITH duplicates AS (
+  SELECT MIN(id) as keep_id, question
+  FROM literature
+  GROUP BY question
+  HAVING COUNT(*) > 1
+)
+DELETE FROM literature
+WHERE id NOT IN (SELECT keep_id FROM duplicates)
+AND question IN (SELECT question FROM duplicates);

@@ -19,9 +19,6 @@ def main():
     """Main function for handling user interaction."""
     logged_in_user = None
 
-    # Add hardcoded questions before starting the main loop
-    add_hardcoded_questions()
-
     while logged_in_user is None:
         print("\n=== Welcome to the Quiz Application ===")
         print("1. Login")
