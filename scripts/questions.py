@@ -1,45 +1,6 @@
-import psycopg2 as pg
+from db import connect_db
+import psycopg2
 from psycopg2 import sql
-from config import config
-
-
-# Database connection functions
-def connect_db():
-    """Establish a connection to the PostgreSQL database."""
-    return pg.connect(**config)
-
-
-# User management functions
-def user_exists(username):
-    """Checks if a user exists in the PostgreSQL database."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
-        result = cursor.fetchone()
-
-    conn.close()
-    return result is not None  # Return True if user exists, otherwise False
-
-def create_user_account(username):
-    """Registers a new user account in the PostgreSQL database."""
-    password = input(f"Create a password for '{username}': ").strip()
-
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
-        if cursor.fetchone():
-            print("❌ Username already exists. Please choose a different one.")
-            conn.close()
-            return None  # Optionally, return None to allow retry
-
-        # Insert the new user into the users table
-        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password))
-        conn.commit()
-        print(f"✅ User '{username}' registered successfully!")
-    
-    conn.close()
-    return username  # Return the username to log them in after registration
-
 
 
 # Topic management functions
@@ -63,7 +24,7 @@ def create_initial_tables():
             );
         """)
         
-        topics = ["languages", "history", "literature", "general_knowledge", "geography"]
+        topics = ["languages", "history", "literature", "general", "geography"]
         for topic in topics:
             # Drop the topic table if it exists
             cursor.execute(sql.SQL("DROP TABLE IF EXISTS {} CASCADE;").format(sql.Identifier(topic)))
@@ -89,41 +50,157 @@ def create_initial_tables():
     # Populate tables with hardcoded questions
     add_hardcoded_questions()
 
-
 def get_topics():
-    """Fetches all available topics from the database."""
+    """Fetches all available topics from the database and returns a mapping of display to raw names."""
     conn = connect_db()
     with conn.cursor() as cursor:
-        cursor.execute("""
-            SELECT topic_name
-            FROM topics
-        """)
+        cursor.execute("SELECT topic_name FROM topics")
         topics_from_db = cursor.fetchall()
-
     conn.close()
 
-    # Return all topics from the database, formatted for display
-    topics = [topic[0].replace("_", " ").title() for topic in topics_from_db]
+    topic_mapping = {}
+    for topic in topics_from_db:
+        raw_name = topic[0].strip().lower()  # The raw name for the database
+        display_name = raw_name.replace("_", " ").title()  # User-friendly name for display
+        topic_mapping[display_name] = raw_name
+
+    return topic_mapping  # Return a dictionary like {"Languages": "languages"}
+
+
+def delete_topic_from_db(topic_name):
+    try:
+        # Normalize the topic_name to lowercase for comparison
+        normalized_topic_name = topic_name.strip().lower()
+
+        conn = connect_db()
+        with conn.cursor() as cursor:
+            # Check if the topic exists in the database, normalized to lowercase
+            cursor.execute("SELECT topic_name FROM topics WHERE LOWER(topic_name) = %s", (normalized_topic_name,))
+            topic = cursor.fetchone()
+
+            if topic:
+                # Deleting the topic from the 'topics' table
+                cursor.execute("DELETE FROM topics WHERE LOWER(topic_name) = %s", (normalized_topic_name,))
+                print(f"Topic '{topic_name}' deleted from the topics table.")
+
+                # Drop the associated table (sanitize topic name to avoid SQL injection)
+                sanitized_topic_name = normalized_topic_name.replace(" ", "_")
+                cursor.execute(f"DROP TABLE IF EXISTS {sanitized_topic_name}")
+                print(f"Table '{sanitized_topic_name}' has been dropped.")
+
+                conn.commit()
+            else:
+                print(f"No topic found with name '{topic_name}' in the topics table.")
+
+        # After deletion, update and show the list of topics
+        updated_topics = get_topics()  # Get the updated list
+        print("Updated list of topics:")
+        for topic in updated_topics:
+            print(topic)  # Show the updated list
+
+    except Exception as e:
+        print(f"❌ An error occurred while deleting the topic: {e}")
     
-    return topics
+    finally:
+        if conn:
+            conn.close()  # Ensure the connection is closed
+
+
+
+def show_topics(topics):
+    """Display the list of topics."""
+    print("\nUpdated list of topics:")
+    for idx, topic in enumerate(topics, 1):
+        print(f"{idx}. {topic}")
+
 
 
 def add_topic(topic_name):
-    """Adds a new topic to the database."""
+    """Adds a new topic to the database and creates a corresponding table."""
     topic_name_normalized = topic_name.strip().lower().replace(" ", "_")  # Normalize topic name
+
+    try:
+        conn = connect_db()
+        with conn.cursor() as cursor:
+            # Check if the topic already exists
+            cursor.execute("SELECT topic_name FROM topics WHERE topic_name = %s", (topic_name_normalized,))
+            if cursor.fetchone():
+                print("❌ Topic already exists.")
+            else:
+                # Insert the topic into the 'topics' table
+                cursor.execute("INSERT INTO topics (topic_name) VALUES (%s)", (topic_name_normalized,))
+                conn.commit()
+
+                # Create a table for the topic with the normalized topic name
+                cursor.execute(sql.SQL("""
+                    CREATE TABLE IF NOT EXISTS {} (
+                        id SERIAL PRIMARY KEY,
+                        difficulty INT CHECK (difficulty BETWEEN 1 AND 3) NOT NULL,
+                        question TEXT NOT NULL,
+                        correct_answer TEXT NOT NULL,
+                        wrong_answer1 TEXT NOT NULL,
+                        wrong_answer2 TEXT NOT NULL,
+                        wrong_answer3 TEXT,
+                        wrong_answer4 TEXT
+                    );
+                """).format(sql.Identifier(topic_name_normalized)))
+                conn.commit()
+
+                print(f"✅ Topic '{topic_name}' added successfully!")
+
+    except psycopg2.Error as e:
+        print(f"❌ Database error: {e}")
+    finally:
+        conn.close()
+
+
+def get_questions(topic, difficulty):
+    """Fetches questions from the selected topic and difficulty level."""
+    # Convert topic to lowercase and replace spaces with underscores for table naming
+    table_name = topic.lower().replace(" ", "_")
 
     conn = connect_db()
     with conn.cursor() as cursor:
-        # Check if the topic already exists
-        cursor.execute("SELECT topic_name FROM topics WHERE topic_name = %s", (topic_name_normalized,))
-        if cursor.fetchone():
-            print("❌ Topic already exists.")
-        else:
-            # Insert the topic into the 'topics' table
-            cursor.execute("INSERT INTO topics (topic_name) VALUES (%s)", (topic_name_normalized,))
-            conn.commit()
+        cursor.execute(sql.SQL("""
+            SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
+                   wrong_answer3, wrong_answer4
+            FROM {table} 
+            WHERE difficulty = %s
+            ORDER BY RANDOM()
+            LIMIT 10;
+        """).format(table=sql.Identifier(table_name)), (difficulty,))
+        questions = cursor.fetchall()
 
-            # Create a table for the topic with the normalized topic name
+    conn.close()
+
+    return questions
+
+
+def validate_question_data(question_data):
+    """Validates the question data format before inserting into the database."""
+    if len(question_data) < 5:
+        print(f"❌ Invalid question data: {question_data}. Expected 5 elements (question, correct answer, and at least 3 wrong answers).")
+        return False
+    while len(question_data) < 6:
+        question_data.append('')
+    question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4 = question_data
+    if not question or not correct_answer or not wrong_answer1 or not wrong_answer2 or not wrong_answer3 or not wrong_answer4:
+        print(f"❌ Invalid question data: {question_data}")
+        return False
+    if len(question) > 255 or len(correct_answer) > 255 or len(wrong_answer1) > 255:
+        print(f"❌ Invalid question data: {question_data}")
+        return False
+    return True
+
+
+def add_questions(topic_name, difficulty, question, correct_answer, wrong_answers):
+    """Adds a new question to the specified topic table."""
+    topic_name_normalized = topic_name.strip().lower().replace(" ", "_")  # Ensure consistency
+
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        try:
+            # Ensure the table for the topic exists (it should have been created previously)
             cursor.execute(sql.SQL("""
                 CREATE TABLE IF NOT EXISTS {} (
                     id SERIAL PRIMARY KEY,
@@ -138,106 +215,20 @@ def add_topic(topic_name):
             """).format(sql.Identifier(topic_name_normalized)))
             conn.commit()
 
-            print(f"✅ Topic '{topic_name}' added successfully!")
-    conn.close()
+            # Insert the new question into the topic-specific table
+            cursor.execute(sql.SQL("""
+                INSERT INTO {} (difficulty, question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """).format(sql.Identifier(topic_name_normalized)),
+                           (difficulty, question, correct_answer, wrong_answers[0], wrong_answers[1], wrong_answers[2], wrong_answers[3]))
 
+            conn.commit()
+            print("✅ Question added successfully!")
 
-def get_questions(topic, difficulty):
-    """Fetches questions from the selected topic and difficulty level."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute(sql.SQL("""
-            SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
-                   wrong_answer3, wrong_answer4
-            FROM {} 
-            WHERE difficulty = %s
-            ORDER BY RANDOM()
-            LIMIT 10;
-        """).format(sql.Identifier(topic)), (difficulty,))
-        questions = cursor.fetchall()
-
-    conn.close()
-
-    return questions
-
-
-def add_question(topic, difficulty, question, correct_answer, wrong_answers):
-    """Adds a question to an existing topic."""
-    # Convert question_data to a list so it can be modified (e.g., adding empty wrong answers)
-    question_data = [question, correct_answer, *wrong_answers]  # Prepare data as a list
-    
-    # Validate the question data
-    if not validate_question_data(question_data):
-        return  # Return if the data is invalid
-    
-    # Database connection and insertion
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute(sql.SQL("""
-            INSERT INTO {} (difficulty, question, correct_answer, 
-            wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s);
-        """).format(sql.Identifier(topic)),
-        (difficulty, *question_data))  # Insert the question using unpacked list data
-        conn.commit()
-        print("✅ Question added successfully!")
-    conn.close()
-
-
-def validate_question_data(question_data):
-    """Validates the question data format before inserting into the database."""
-    
-    # Ensure there are at least 5 elements (question, correct answer, and 4 wrong answers)
-    if len(question_data) < 5:
-        print(f"❌ Invalid question data: {question_data}. Expected 5 elements (question, correct answer, and at least 3 wrong answers).")
-        return False
-
-    # Add empty strings for any missing wrong answers
-    while len(question_data) < 6:
-        question_data.append('')  # Add empty string for any missing wrong answer
-    
-    # Unpack the values
-    question, correct_answer, wrong_answer1, wrong_answer2, wrong_answer3, wrong_answer4 = question_data
-
-    # Check if any field is empty
-    if not question or not correct_answer or not wrong_answer1 or not wrong_answer2 or not wrong_answer3 or not wrong_answer4:
-        print(f"❌ Invalid question data: {question_data}")
-        return False
-
-    # Check if question is not too long or too short (optional, just an example)
-    if len(question) > 255 or len(correct_answer) > 255 or len(wrong_answer1) > 255:
-        print(f"❌ Invalid question data: {question_data}")
-        return False
-
-    return True
-
-
-def get_topics():
-    """Fetches all available topics from the database and filters with known topics."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("""
-            SELECT topic_name
-            FROM topics
-        """)
-        topics_from_db = cursor.fetchall()
-
-    conn.close()
-
-    # List of known topics in lowercase
-    known_topics = ['languages', 'history', 'literature', 'general_knowledge', 'geography']
-
-    topics = []
-    for topic in topics_from_db:
-        topic_name = topic[0].strip().lower()  # Strip any extra spaces and convert to lowercase
-
-        if topic_name in known_topics:
-            # Capitalize for proper display
-            topics.append(topic_name.title())  # `title()` capitalizes each word in multi-word topics
-
-    return topics
-
-
+        except psycopg2.Error as e:
+            print(f"❌ Error: {e}")
+        finally:
+            conn.close()
 
 
 # Score management functions
@@ -313,8 +304,6 @@ def get_top_user():
 
     return winner
 
-
-
 # Topic validation function
 def validate_topic_table(topic):
     """Validate that a table has the correct structure for a quiz topic."""
@@ -331,9 +320,6 @@ def validate_topic_table(topic):
 
     required_columns = {'difficulty', 'question', 'correct_answer', 'wrong_answer1', 'wrong_answer2', 'wrong_answer3', 'wrong_answer4'}
     return required_columns.issubset(columns)
-
-
-# Hardcoded question population functions
 
 def create_topic_table(topic):
     """Creates a table for a given topic with the necessary structure."""
@@ -353,6 +339,7 @@ def create_topic_table(topic):
         """).format(sql.Identifier(topic)))
         conn.commit()
     conn.close()
+# Hardcoded question population functions
 
 def add_hardcoded_questions():
     """Populates the topics tables with hardcoded questions and answers."""
@@ -388,31 +375,7 @@ def add_hardcoded_questions():
             (3, "Who wrote 'One Hundred Years of Solitude'?", "Gabriel García Márquez", "Isabel Allende", "Mario Vargas Llosa", "Carlos Fuentes", "Jorge Luis Borges"),
             (3, "Which novel is set during the time of the American Civil War?", "Gone with the Wind", "Moby Dick", "Pride and Prejudice", "War and Peace", "The Scarlet Letter"),
             (3, "Who wrote 'Crime and Punishment'?", "Fyodor Dostoevsky", "Leo Tolstoy", "Anton Chekhov", "Vladimir Nabokov", "Alexander Pushkin")
-        ],
-        "general_knowledge": [
-            (1, "What is the capital of France?", "Paris", "London", "Berlin", "Madrid", "Rome"),
-            (1, "Which planet is known as the Red Planet?", "Mars", "Venus", "Earth", "Jupiter", "Saturn"),
-            (1, "What is the largest ocean on Earth?", "Pacific Ocean", "Atlantic Ocean", "Indian Ocean", "Southern Ocean", "Arctic Ocean"),
-            (2, "Who invented the telephone?", "Alexander Graham Bell", "Thomas Edison", "Nikola Tesla", "Albert Einstein", "Benjamin Franklin"),
-            (2, "What is the smallest country in the world?", "Vatican City", "Monaco", "San Marino", "Liechtenstein", "Nauru"),
-            (2, "What is the largest island in the world?", "Greenland", "Australia", "New Guinea", "Borneo", "Madagascar"),
-            (3, "Which inventor is known for creating the first successful airplane?", "Wright Brothers", "Alexander Graham Bell", "Thomas Edison", "Nikola Tesla", "Elon Musk"),
-            (3, "Which company created the first personal computer?", "Apple", "IBM", "Microsoft", "Compaq", "HP"),
-            (3, "What year did the first manned mission to Mars occur?", "Not yet", "2025", "2030", "2020", "2040")
-        ],
-        "geography": [
-            (1, "What is the largest continent?", "Asia", "Africa", "Europe", "North America", "Australia"),
-            (1, "Which country has the most population?", "China", "India", "USA", "Indonesia", "Brazil"),
-            (1, "Which country is known as the Land of the Rising Sun?", "Japan", "South Korea", "China", "Thailand", "India"),
-            (2, "What is the longest river in the world?", "Nile River", "Amazon River", "Yangtze River", "Mississippi River", "Ganges River"),
-            (2, "What is the largest desert in the world?", "Sahara Desert", "Gobi Desert", "Kalahari Desert", "Arabian Desert", "Atacama Desert"),
-            (2, "Which is the smallest country in Asia?", "Maldives", "Singapore", "Bhutan", "Nepal", "Sri Lanka"),
-            (3, "Which is the largest country by area?", "Russia", "Canada", "United States", "China", "Brazil"),
-            (3, "Which country is the largest producer of coffee?", "Brazil", "Vietnam", "Colombia", "Indonesia", "Ethiopia"),
-            (3, "Which country is known for the ancient pyramids?", "Egypt", "Mexico", "Peru", "India", "China")
-        ]
-    }
-
+        ]}
     conn = connect_db()
     with conn.cursor() as cursor:
         for topic, questions in topics_data.items():
