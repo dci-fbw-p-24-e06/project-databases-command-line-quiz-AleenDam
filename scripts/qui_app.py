@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 from auth import login_user, register_user
 from questions import add_questions, get_topics, get_questions, get_all_user_scores, get_top_user
 import random
@@ -160,7 +160,6 @@ class QuizApp:
         # Optionally, you can add a button to return to the main menu
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
 
-
     def add_new_question(self):
         """Handles the process of adding a new question to a topic."""
         self.clear_window()
@@ -180,7 +179,7 @@ class QuizApp:
 
         # OR: Create new topic
         tk.Label(self.root, text="Or Enter New Topic").grid(row=2, column=0, sticky="e")
-        new_topic_entry = tk.Entry(self.root)
+        new_topic_entry = tk.Entry(self.root, width=50)  # Set width to 50 for longer text field
         new_topic_entry.grid(row=2, column=1, sticky="w")
 
         # Difficulty
@@ -193,7 +192,7 @@ class QuizApp:
         entries = []
         for idx, label in enumerate(labels, start=4):
             tk.Label(self.root, text=label).grid(row=idx, column=0, sticky="e")
-            entry = tk.Entry(self.root)
+            entry = tk.Entry(self.root, width=50)  # Set width to 50 for longer text fields
             entry.grid(row=idx, column=1, sticky="w")
             entries.append(entry)
 
@@ -233,17 +232,16 @@ class QuizApp:
             add_topic(new_topic_entry.get().strip())  # Add the new topic and create a table
 
         # Add question to the correct table using your existing add_questException in Tkinter callback
-
         add_questions(topic_name, difficulty, question, correct_answer, wrong_answers)
-        
+
         messagebox.showinfo("Success", f"Question added to the topic '{topic_name}'!")
 
-        # Ask if the user wants to continue or return to the main menu
+
         user_response = messagebox.askyesno("Continue", "Do you want to add another question?")
         if user_response:
-            self.add_new_question()  # Continue adding questions
+            self.add_new_question()
         else:
-                self.return_to_main_menu()  # Go back to the main menu
+            self.show_menu()  # 👈 This shows your full menu again
 
 
     def delete_topics(self):
@@ -355,10 +353,6 @@ class QuizApp:
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
 
 
-
-
-
-
     def view_all_scores(self):
         self.clear_window()
         
@@ -384,7 +378,6 @@ class QuizApp:
 
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
 
-
     def clear_screen(self):
         for widget in self.root.winfo_children():
             widget.destroy()
@@ -396,9 +389,20 @@ class QuizApp:
     def return_to_main_menu(self):
         self.clear_window()
         tk.Label(self.root, text="Welcome to the Quiz App!", font=("Helvetica", 16)).grid(row=0, column=0, columnspan=2, pady=10)
-        tk.Button(self.root, text="Add New Question", command=self.add_new_question).grid(row=1, column=0, pady=10)
-        tk.Button(self.root, text="Other Option 1", command=self.some_other_function).grid(row=2, column=0, pady=10)
-        tk.Button(self.root, text="Exit", command=self.root.quit).grid(row=3, column=0, pady=10)    
+
+        tk.Button(self.root, text="1. Start Quiz", command=self.start_quiz).grid(row=1, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="2. Add New Question", command=self.add_new_question).grid(row=2, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="3. Create New Topic", command=self.create_new_topic).grid(row=3, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="4. Delete Topic", command=self.delete_existing_topic).grid(row=4, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="5. View Available Topics", command=self.view_available_topics).grid(row=5, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="6. Show My Score", command=self.show_my_score).grid(row=6, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="7. Change User (Logout)", command=self.logout_user).grid(row=7, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="8. Show Scores of Other Users", command=self.show_all_scores).grid(row=8, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="9. Show Winner", command=self.show_winner).grid(row=9, column=0, pady=5, sticky="w")
+        tk.Button(self.root, text="10. Exit", command=self.root.quit).grid(row=10, column=0, pady=10, sticky="w")
+
+
+
 
 if __name__ == "__main__":
     root = tk.Tk()
