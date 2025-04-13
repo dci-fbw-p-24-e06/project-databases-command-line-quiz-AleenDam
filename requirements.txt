@@ -46,3 +46,4 @@ WITH duplicates AS (
 DELETE FROM literature
 WHERE id NOT IN (SELECT keep_id FROM duplicates)
 AND question IN (SELECT question FROM duplicates);
+

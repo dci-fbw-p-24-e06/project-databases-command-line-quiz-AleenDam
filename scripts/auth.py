@@ -100,3 +100,28 @@ def change_user():
             print("Invalid choice. Please select 1 to log in or 2 to register.")
     
     return logged_in_user
+
+### GUI
+
+def login_user(username, password):
+    """Login logic for GUI"""
+    if not user_exists(username):
+        return False
+    return check_password(username, password)
+
+
+def register_user(username, password):
+    """Registration logic for GUI"""
+    from db import connect_db
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
+        if cursor.fetchone():
+            conn.close()
+            return False  # User already exists
+
+        cursor.execute("INSERT INTO users (username, password) VALUES (%s, %s)", (username, password))
+        conn.commit()
+    conn.close()
+    return True
+

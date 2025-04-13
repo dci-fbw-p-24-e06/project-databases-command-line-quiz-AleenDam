@@ -63,7 +63,7 @@ def add_new_question():
         topic_name = input("Enter the name of the new topic: ").strip()
 
         # Create the new topic (assuming there's a function to handle this)
-        add_new_topic(topic_name)
+        add_topic(topic_name)
 
         # Now that the topic is created, collect question details
         difficulty = int(input("Enter difficulty (1 - Easy, 2 - Medium, 3 - Hard): ").strip())
