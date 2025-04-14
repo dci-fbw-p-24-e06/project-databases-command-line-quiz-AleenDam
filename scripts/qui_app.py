@@ -6,6 +6,7 @@ import random
 from take_quiz import take_quiz
 from quiz_functions import *
 
+
 class QuizApp:
     def __init__(self, root):
         self.root = root
@@ -101,12 +102,9 @@ class QuizApp:
         else:
             messagebox.showerror("Error", "Could not register user.", parent=self.root)  # Specify parent as self.root
 
-
-
     def show_menu(self):
         """Displays the main menu options."""
         self.clear_window()
-        print("show_menu() called!")
 
         tk.Label(self.root, text=f"Welcome, {self.current_user}", font=("Helvetica", 16)).pack(pady=20)
 
@@ -490,21 +488,26 @@ class QuizApp:
     def view_winner(self):
         self.clear_window()
 
-        winner = get_top_user()  # (username, avg_score)
-        if not winner:
+        winners = get_top_user()
+        if not winners:
             messagebox.showinfo("No Winner", "No scores available to determine a winner.")
         else:
-            username, avg_score = winner
+            winner_text = "🏆 Winner(s):\n"
+            for username, avg_score in winners:
+                winner_text += f"{username.capitalize()} with an average score of {avg_score:.2f}\n"
+
             tk.Label(
                 self.root,
-                text=f"🏆 Winner: {username.capitalize()} with an average score of {avg_score:.2f}",
+                text=winner_text.strip(),
                 font=("Helvetica", 16, "bold"),
-                fg="#4B0082",  # Indigo or purple tone
-                wraplength=600,
+                fg="#4B0082",
+                wraplength=800,
                 justify="center"
             ).pack(pady=50)
 
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
+
+
 
 
     def clear_screen(self):

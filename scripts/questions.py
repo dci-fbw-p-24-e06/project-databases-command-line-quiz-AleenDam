@@ -301,24 +301,32 @@ def get_all_user_scores():
     return results
 
 def get_top_user():
+    """Fetch all users with the highest overall average score across all topics."""
+    query = """
+        WITH user_averages AS (
+            SELECT username, ROUND(AVG(score), 2) AS avg_score
+            FROM scores
+            GROUP BY username
+        ),
+        top_score AS (
+            SELECT MAX(avg_score) AS highest_avg FROM user_averages
+        )
+        SELECT username, avg_score
+        FROM user_averages
+        WHERE avg_score = (SELECT highest_avg FROM top_score);
+    """
+    return execute_query(query)
+
+
+def execute_query(query, params=None, fetch=True):
     conn = connect_db()
     cur = conn.cursor()
-
-    # Query to get the user with the highest average score
-    cur.execute("""
-        SELECT username, AVG(score)::numeric(5,2) AS avg_score
-        FROM scores
-        GROUP BY username
-        ORDER BY avg_score DESC
-        LIMIT 1;
-    """)
-
-    winner = cur.fetchone()
-
+    cur.execute(query, params or ())
+    results = cur.fetchall() if fetch else None
+    conn.commit()
     cur.close()
     conn.close()
-
-    return winner
+    return results
 
 # Topic validation function
 def validate_topic_table(topic):

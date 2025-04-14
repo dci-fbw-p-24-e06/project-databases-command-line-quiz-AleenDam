@@ -164,14 +164,38 @@ def show_all_user_scores():
     for username, topic, avg in all_scores:
         print(f"{username.capitalize()} | Topic: {topic.capitalize()} | Avg Score: {avg:.2f}")
 
+    def show_winner():
+        """Display the user(s) with the highest average score and most attempts."""
+        winners = get_top_user()
+        
+        # Debugging output
+        print(f"Winners fetched: {winners}")
+
+        if winners:
+            print("🏆 Winner(s):")
+            for winner in winners:
+                if len(winner) == 3:  # Ensure correct number of values before unpacking
+                    username, avg_score, attempts = winner
+                    print(f"{username.capitalize()} - Avg Score: {avg_score:.2f}, Attempts: {attempts}")
+                else:
+                    print(f"Unexpected result in winner data: {winner}")
+        else:
+            print("No scores found to determine a winner.")
+
+
 def show_winner():
-    """Display the user with the highest average score."""
-    winner_data = get_top_user()
-    if winner_data:
-        username, avg_score = winner_data
-        print(f"🏆 Winner: {username.capitalize()} with an average score of {avg_score:.2f}")
+    """Displays all winners (users with the highest average score)."""
+    winners = get_top_user()
+
+    if not winners:
+        print("No scores available to determine a winner.")
     else:
-        print("No scores found to determine a winner.")
+        print("🏆 Top Winner(s):")
+        for username, avg_score in winners:
+            print(f"{username.capitalize()} with an average score of {avg_score:.2f}")
+
+
+
 
 
 from collections import defaultdict
