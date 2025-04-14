@@ -254,7 +254,7 @@ def save_score(username, topic, score):
             """, (username, topic, score))
             conn.commit()
         conn.close()
-        print(f"Score for '{username}' in topic '{topic}' saved successfully!")
+        print(f"Score saved successfully!")
     except Exception as e:
         print(f"❌ Error saving score: {e}")
 

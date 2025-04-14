@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 from auth import login_user, register_user
-from questions import add_questions, get_topics, get_questions, get_all_user_scores, get_top_user
+from questions import *
 import random
 from take_quiz import take_quiz
 from quiz_functions import *
@@ -27,35 +27,86 @@ class QuizApp:
         tk.Label(self.root, text="Login to Quiz", font=("Arial", 16)).pack(pady=10)
 
         tk.Label(self.root, text="Username").pack()
-        tk.Entry(self.root, textvariable=self.username_var).pack()
+        username_entry = tk.Entry(self.root, textvariable=self.username_var)
+        username_entry.pack()
 
         tk.Label(self.root, text="Password").pack()
-        tk.Entry(self.root, textvariable=self.password_var, show="*").pack()
+        password_entry = tk.Entry(self.root, textvariable=self.password_var, show="*")
+        password_entry.pack()
 
-        tk.Button(self.root, text="Login", command=self.login).pack(pady=5)
+        # Add Password Hint field (Initially hidden)
+        self.hint_var = tk.StringVar()
+        self.hint_label = tk.Label(self.root, text="Password Hint (optional)")
+        self.hint_entry = tk.Entry(self.root, textvariable=self.hint_var)
+
+        # These elements are hidden initially and will only show after failed login
+        self.hint_label.pack_forget()  # Hide hint label initially
+        self.hint_entry.pack_forget()  # Hide hint entry initially
+
+        # Buttons
+        login_button = tk.Button(self.root, text="Login", command=self.login)
+        login_button.pack(pady=5)
         tk.Button(self.root, text="Register", command=self.register).pack()
+
+        # Focus handling
+        username_entry.focus_set()
+
+        # Bind Enter key
+        username_entry.bind("<Return>", lambda event: password_entry.focus_set())
+        password_entry.bind("<Return>", lambda event: self.login())
 
     def login(self):
         username = self.username_var.get()
         password = self.password_var.get()
-        if login_user(username, password):
+
+        # Attempt to log in
+        result = login_user(username, password)
+
+        if result:
             self.current_user = username  # Store logged-in user
-            messagebox.showinfo("Success", f"Welcome, {username}!")
-            self.show_menu()
+            messagebox.showinfo("Success", f"Welcome, {username}!", parent=self.root)  # Show success message
+            self.show_menu()  # Show the main menu
         else:
-            messagebox.showerror("Login Failed", "Invalid username or password.")
+            messagebox.showerror("Login Failed", "Invalid username or password.", parent=self.root)  # Show error message
+
+            # Ask if the user wants to see the password hint
+            response = messagebox.askyesno("Password Hint", "Do you want to see the password hint?", parent=self.root)  # Specify parent
+            if response:  # User clicked Yes
+                hint = get_password_hint(username)  # Fetch the password hint
+                if hint:
+                    messagebox.showinfo("Password Hint", f"Your password hint is: {hint}", parent=self.root)  # Specify parent
+                else:
+                    messagebox.showinfo("Password Hint", "No password hint set for this account.", parent=self.root)  # Specify parent
 
     def register(self):
         username = self.username_var.get()
         password = self.password_var.get()
-        if register_user(username, password):
-            messagebox.showinfo("Success", "User registered.")
+        hint = self.hint_var.get()  # Get password hint
+
+        # Prompt for password hint if it's not already filled
+        if not hint:  # If hint is not provided, ask the user to provide one
+            hint_response = messagebox.askyesno("Password Hint", "Would you like to set a password hint?", parent=self.root)  # Specify parent as self.root
+            if hint_response:
+                self.hint_label.pack()  # Show the hint label
+                self.hint_entry.pack()  # Show the hint entry
+                messagebox.showinfo("Password Hint", "Please enter a hint for your password.", parent=self.root)  # Specify parent as self.root
+                return  # Exit and allow user to enter a hint
+            else:
+                hint = ""  # If the user chooses not to provide a hint, set it to an empty string.
+
+        if register_user(username, password, hint):
+            self.current_user = username  # Log the user in immediately after registration
+            messagebox.showinfo("Success", "User registered successfully. You are now logged in.", parent=self.root)  # Specify parent as self.root
+            self.show_menu()  # Show the main menu after successful registration
         else:
-            messagebox.showerror("Error", "Could not register user.")
+            messagebox.showerror("Error", "Could not register user.", parent=self.root)  # Specify parent as self.root
+
+
 
     def show_menu(self):
         """Displays the main menu options."""
-        self.clear_screen()
+        self.clear_window()
+        print("show_menu() called!")
 
         tk.Label(self.root, text=f"Welcome, {self.current_user}", font=("Helvetica", 16)).pack(pady=20)
 
@@ -92,16 +143,18 @@ class QuizApp:
             tk.Button(self.root, text=f"Level {level}", command=lambda l=level: self.start_quiz(topic, l)).pack(pady=5)
 
     def start_quiz(self, topic, difficulty):
-        # Fetch the questions for the selected topic and difficulty
         self.questions = get_questions(topic, difficulty)
 
         if not self.questions:
             messagebox.showerror("No Questions", f"No questions available for the topic '{topic}' with difficulty {difficulty}.")
             return
 
-        self.rounds = 0  # Reset rounds counter
-        self.score = 0  # Reset score
-        self.ask_question()  # Start the quiz by asking the first question
+        self.current_topic = topic.capitalize()  # Ensure topic name is consistent (capitalize first letter)
+        self.current_difficulty = difficulty
+        self.max_rounds = min(7, len(self.questions))  # Cap to 7 rounds
+        self.rounds = 0
+        self.score = 0
+        self.ask_question()
 
     def ask_question(self):
         # Check if we have more questions left to ask
@@ -112,12 +165,12 @@ class QuizApp:
         question = self.questions[self.rounds]  # Get the current question
         self.current_question = question
         question_text = question[0]  # The question text
-        all_answers = list(filter(None, question[1:7]))  # Filter out empty answers
+        all_answers = list(filter(None, question[1:6]))  # Filter out empty answers
         random.shuffle(all_answers)  # Shuffle answers for random order
 
-        # Display the question and answers in the GUI
+        # Display the question and answers in the GUI (without difficulty level)
         self.clear_window()
-        tk.Label(self.root, text=f"Round {self.rounds + 1}: {question_text}", font=("Helvetica", 14)).pack(pady=10)
+        tk.Label(self.root, text=question_text, font=("Helvetica", 14)).pack(pady=10)  # Only show the question text
 
         for ans in all_answers:
             tk.Button(self.root, text=ans, command=lambda a=ans: self.check_answer(a)).pack(pady=5)
@@ -133,9 +186,17 @@ class QuizApp:
         self.rounds += 1  # Move to the next question
         self.ask_question()  # Ask the next question
 
+
     def end_quiz(self):
-        # Display the final score at the end of the quiz
-        messagebox.showinfo("Quiz Ended", f"Your final score is {self.score}/{self.rounds}.")
+        # Calculate final score as a percentage
+        normalized_topic = self.current_topic.strip().lower().replace(" ", "_")
+        percentage_score = (self.score / self.rounds) * 100 if self.rounds > 0 else 0
+        save_score(self.current_user, normalized_topic, percentage_score)
+
+
+        # Display the result
+        messagebox.showinfo("Quiz Ended", f"Your final score is {self.score}/{self.rounds} ({percentage_score:.2f}%)")
+        
         self.clear_window()
         tk.Label(self.root, text="Quiz Over!", font=("Helvetica", 16)).pack(pady=20)
         tk.Button(self.root, text="Return to Main Menu", command=self.show_menu).pack(pady=10)

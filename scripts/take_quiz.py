@@ -47,7 +47,7 @@ def take_quiz(logged_in_user):
 
     asked_questions = set()
     score = 0
-    total_rounds = min(10, len(questions))  # Limit rounds to a maximum of 10 or the number of available questions
+    total_rounds = min(7, len(questions))  # Limit rounds to a maximum of 7or the number of available questions
     rounds = 0
     correct_answers = 0
 
