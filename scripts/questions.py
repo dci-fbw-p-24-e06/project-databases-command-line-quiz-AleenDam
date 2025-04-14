@@ -164,7 +164,7 @@ def get_questions(topic, difficulty=None):
         if difficulty:
             cursor.execute(sql.SQL("""
                 SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
-                       wrong_answer3, wrong_answer4
+                       wrong_answer3, wrong_answer4, difficulty
                 FROM {table}
                 WHERE difficulty = %s
                 ORDER BY RANDOM();  -- Shuffle questions
@@ -172,7 +172,7 @@ def get_questions(topic, difficulty=None):
         else:
             cursor.execute(sql.SQL("""
                 SELECT question, correct_answer, wrong_answer1, wrong_answer2, 
-                       wrong_answer3, wrong_answer4
+                       wrong_answer3, wrong_answer4, difficulty
                 FROM {table}
                 ORDER BY RANDOM();  -- Shuffle questions
             """).format(table=sql.Identifier(table_name)))
@@ -242,15 +242,22 @@ def add_questions(topic_name, difficulty, question, correct_answer, wrong_answer
 
 # Score management functions
 def save_score(username, topic, score):
-    """Saves the user's score into the database."""
-    conn = connect_db()
-    with conn.cursor() as cursor:
-        cursor.execute("""
-            INSERT INTO scores (username, topic_name, score) 
-            VALUES (%s, %s, %s);
-        """, (username, topic, score))
-        conn.commit()
-    conn.close()
+    """Saves the user's score into the database, updating if a record already exists."""
+    try:
+        conn = connect_db()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO scores (username, topic_name, score)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (username, topic_name)
+                DO UPDATE SET score = EXCLUDED.score;
+            """, (username, topic, score))
+            conn.commit()
+        conn.close()
+        print(f"Score for '{username}' in topic '{topic}' saved successfully!")
+    except Exception as e:
+        print(f"❌ Error saving score: {e}")
+
 
 
 def view_scores(user):

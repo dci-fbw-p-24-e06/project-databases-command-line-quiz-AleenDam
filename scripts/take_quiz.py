@@ -1,6 +1,7 @@
 import random
 from questions import *
 
+
 def validate_difficulty():
     """Validates the difficulty level input."""
     difficulty_level = input("Select difficulty level (1 - Easy, 2 - Medium, 3 - Hard): ")
@@ -46,8 +47,9 @@ def take_quiz(logged_in_user):
 
     asked_questions = set()
     score = 0
+    total_rounds = min(10, len(questions))  # Limit rounds to a maximum of 10 or the number of available questions
     rounds = 0
-    total_rounds = min(10, len(questions))
+    correct_answers = 0
 
     random.shuffle(questions)
     index = 0
@@ -59,7 +61,11 @@ def take_quiz(logged_in_user):
         if question[0] in asked_questions:
             continue
 
-        all_answers = list(filter(None, question[1:7]))
+        all_answers = list(filter(None, question[1:7]))  # All non-null answers
+
+        # Ensure we have only 5 answers
+        if len(all_answers) > 5:
+            all_answers = all_answers[:5]  # Keep only the first 5 answers
 
         if len(all_answers) < 2:
             print("⚠️ Skipping malformed question.")
@@ -80,6 +86,7 @@ def take_quiz(logged_in_user):
                 if all_answers[answer_index] == question[1]:
                     print("✅ Correct!")
                     score += 1
+                    correct_answers += 1
                 else:
                     print(f"❌ Incorrect. The correct answer was: {question[1]}")
             else:
@@ -90,5 +97,11 @@ def take_quiz(logged_in_user):
         asked_questions.add(question[0])
         rounds += 1
 
-    print(f"\nYour final score after {rounds} round{'s' if rounds != 1 else ''}: {score}/{rounds}")
-    save_score(logged_in_user, topic, score)
+    # Calculate final score as a percentage of correct answers
+    percentage_score = (correct_answers / total_rounds) * 100 if total_rounds > 0 else 0
+
+    print(f"\nYour final score after {rounds} round{'s' if rounds != 1 else ''}: {score}/{total_rounds} ({percentage_score:.2f}%)")
+    save_score(logged_in_user, topic, percentage_score)  # Save the score as a percentage
+
+
+

@@ -174,9 +174,10 @@ def show_winner():
         print("No scores found to determine a winner.")
 
 
+from collections import defaultdict
+
 def display_questions():
-    """Display all questions from a topic selected by the user."""
-    # Fetch all topics
+    """Display all questions from a topic selected by the user, grouped by difficulty level."""
     topic_mapping = get_topics()
 
     if not topic_mapping:
@@ -188,25 +189,32 @@ def display_questions():
     for index, (display_name, raw_name) in enumerate(topic_mapping.items(), 1):
         print(f"{index}. {display_name}")
 
-    # Let the user choose a topic
     try:
         topic_choice = int(input("\nEnter the number of the topic you want to view questions from: "))
         if topic_choice < 1 or topic_choice > len(topic_mapping):
             print("Invalid topic selection.")
             return
 
-        # Fetch the raw name of the selected topic
         selected_topic = list(topic_mapping.values())[topic_choice - 1]
 
-        # Fetch questions for the selected topic (no difficulty passed)
         questions = get_questions(selected_topic)
 
         if not questions:
             print(f"No questions found for the topic '{selected_topic}'.")
-        else:
-            print(f"\nDisplaying questions from the topic '{selected_topic}':")
-            for idx, question in enumerate(questions, 1):
-                print(f"Q{idx}: {question[0]}")  # Only display the question (no answers)
-                print("-" * 40)  # Separator between questions
+            return
+
+        # Group questions by difficulty using a dictionary
+        grouped = defaultdict(list)
+        for q in questions:
+            grouped[q[-1]].append(q[0])  # q[-1] = difficulty, q[0] = question text
+
+        print(f"\nQuestions from topic: {selected_topic}")
+        for difficulty in sorted(grouped.keys()):
+            print(f"\n=== Difficulty {difficulty} ===")
+            for idx, question_text in enumerate(grouped[difficulty], 1):
+                print(f"Q{idx}: {question_text}")
+                print("-" * 40)
+
     except ValueError:
         print("Invalid input. Please enter a valid number.")
+

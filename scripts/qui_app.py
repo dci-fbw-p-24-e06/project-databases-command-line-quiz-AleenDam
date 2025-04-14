@@ -126,7 +126,7 @@ class QuizApp:
         correct_answer = self.current_question[1]  # The correct answer is at index 1
         if selected_answer == correct_answer:
             messagebox.showinfo("Correct", "✅ Correct!")
-            self.score += 1  # Increment score for correct answer
+            self.score += 1
         else:
             messagebox.showerror("Incorrect", f"❌ Incorrect. The correct answer was: {correct_answer}")
 
@@ -243,39 +243,53 @@ class QuizApp:
         else:
             self.show_menu()  # 👈 This shows your full menu again
 
-
     def delete_topics(self):
         self.clear_window()
-        
-        topics = get_topics()  # Fetch all topics
+
+        topics = get_topics()  # Fetch all topics from the database
         if not topics:
             messagebox.showinfo("No Topics", "There are no topics available to delete.")
-            self.show_menu()
+            self.show_menu()  # Return to the main menu if no topics
             return
 
         selected_topic = tk.StringVar()
-        selected_topic.set(topics[0])
+
+        # If topics is a dictionary, extract the keys (topic names)
+        topic_names = list(topics.keys())
+        selected_topic.set(topic_names[0])  # Set the first topic as default selection
 
         tk.Label(self.root, text="Select Topic to Delete", font=("Helvetica", 16)).pack(pady=20)
-        topic_menu = tk.OptionMenu(self.root, selected_topic, *topics)
+        
+        # Use OptionMenu with the correct list of topic names
+        topic_menu = tk.OptionMenu(self.root, selected_topic, *topic_names)  
         topic_menu.pack(pady=10)
 
-        # Delete button
+        # Delete button with the correct callback
         tk.Button(self.root, text="Delete Topic", command=lambda: self.confirm_delete_topic(selected_topic.get())).pack(pady=10)
 
-        # Back button
+        # Back button to return to the main menu
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
 
+
+
     def confirm_delete_topic(self, topic_name):
-        # Confirm if user really wants to delete the topic
+        """Confirm and delete the selected topic."""
         response = messagebox.askyesno("Delete Topic", f"Are you sure you want to delete the topic '{topic_name}'?")
         if response:
-            # Delete the topic using the appropriate backend function
-            delete_topic(topic_name)
-            messagebox.showinfo("Success", f"Topic '{topic_name}' deleted successfully!")
-            self.show_menu()
+            try:
+                # Call the method to delete the topic
+                delete_topic_from_db(topic_name)
+
+                # Show success message
+                messagebox.showinfo("Success", f"Topic '{topic_name}' deleted successfully!")
+
+                # Return to the main menu or update the topic list
+                self.show_menu()  # You could also refresh the list here if needed
+            except Exception as e:
+                messagebox.showerror("Error", f"An error occurred while deleting the topic: {e}")
         else:
-            self.show_menu()
+            self.show_menu()  # Return to the main menu if deletion is canceled
+
 
 
     def display_topic_questions(self):
@@ -310,7 +324,6 @@ class QuizApp:
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
 
 
-
     def show_questions(self, topic_name):
         questions = get_questions(topic_name)  # Fetch the questions for the selected topic
 
@@ -319,15 +332,54 @@ class QuizApp:
             self.show_menu()
             return
 
+        # Group questions by difficulty level
+        grouped = {1: [], 2: [], 3: []}
+        for q in questions:
+            difficulty = q[-1]  # Assuming difficulty is the last column
+            grouped[difficulty].append(q)
+
         self.clear_window()
+
         tk.Label(self.root, text=f"Questions for '{topic_name}'", font=("Helvetica", 16)).pack(pady=20)
 
-        # Display questions
-        for idx, question in enumerate(questions, start=1):
-            tk.Label(self.root, text=f"{idx}. {question[0]}", font=("Helvetica", 14)).pack(pady=5)
+        # Create a canvas and scrollbar
+        canvas = tk.Canvas(self.root)
+        scrollbar = tk.Scrollbar(self.root, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas)
 
-        # Back button to return to the main menu
-        tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
+        scrollable_frame.bind(
+            "<Configure>",  # Update the scroll region whenever the frame changes
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        # Create a window inside the canvas to add all your content
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.config(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Show questions grouped by difficulty
+        question_index = 1
+        for level in sorted(grouped.keys()):
+            if grouped[level]:  # Only show header if there are questions at this level
+                tk.Label(scrollable_frame, text=f"=== Difficulty {level} ===", font=("Helvetica", 15, "bold")).pack(pady=10)
+
+                for question in grouped[level]:
+                    question_text = question[0]
+                    tk.Label(
+                        scrollable_frame,
+                        text=f"Q{question_index}: {question_text}",
+                        font=("Helvetica", 14),
+                        wraplength=600,  # Adjust this to control the width of the text
+                        justify="left",  # Ensure text aligns properly
+                        anchor="w"  # Ensure left alignment (anchor left)
+                    ).pack(pady=5, padx=20)  # Add padding to the left for spacing
+                    tk.Label(scrollable_frame, text="-" * 100, fg="gray").pack()
+                    question_index += 1
+
+        # Back button
+        tk.Button(scrollable_frame, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
 
 
     def view_my_scores(self):
@@ -356,27 +408,43 @@ class QuizApp:
     def view_all_scores(self):
         self.clear_window()
         
-        # Fetch all user scores
-        scores = get_all_user_scores()  # Backend function to fetch scores for all users
+        scores = get_all_user_scores()
+        
         if not scores:
             messagebox.showinfo("No Scores", "No scores available.")
-        else:
-            tk.Label(self.root, text="All Users' Scores", font=("Helvetica", 16)).pack(pady=20)
-            for score in scores:
-                tk.Label(self.root, text=f"{score[0]}: {score[1]}", font=("Helvetica", 14)).pack(pady=5)
+            return
+
+        tk.Label(self.root, text="📊 All Users' Scores by Topic", font=("Helvetica", 16, "bold")).pack(pady=20)
+
+        for username, topic, avg_score in scores:
+            tk.Label(
+                self.root,
+                text=f"{username.capitalize()} - {topic.capitalize()}: {avg_score:.2f}",
+                font=("Helvetica", 14),
+                fg="#333"
+            ).pack(pady=2)
 
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
 
     def view_winner(self):
         self.clear_window()
 
-        winner = get_top_user()  # Get the user with the highest score
+        winner = get_top_user()  # (username, avg_score)
         if not winner:
-            messagebox.showinfo("No Winner", "No winner yet.")
+            messagebox.showinfo("No Winner", "No scores available to determine a winner.")
         else:
-            tk.Label(self.root, text=f"The current winner is: {winner[0]}", font=("Helvetica", 16)).pack(pady=20)
+            username, avg_score = winner
+            tk.Label(
+                self.root,
+                text=f"🏆 Winner: {username.capitalize()} with an average score of {avg_score:.2f}",
+                font=("Helvetica", 16, "bold"),
+                fg="#4B0082",  # Indigo or purple tone
+                wraplength=600,
+                justify="center"
+            ).pack(pady=50)
 
         tk.Button(self.root, text="Back to Main Menu", command=self.show_menu).pack(pady=20)
+
 
     def clear_screen(self):
         for widget in self.root.winfo_children():
