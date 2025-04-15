@@ -71,7 +71,13 @@ class AnimatedQuizApp:
             try:
                 if os.path.exists(path):
                     img = Image.open(path)
-                    img = img.resize((200, 200), Image.LANCZOS)
+                    # Use different sizes for different images
+                    if key == 'welcome':
+                        # Keep the welcome image larger
+                        img = img.resize((800, 600), Image.LANCZOS)
+                    else:
+                        # Other images remain at 200x200
+                        img = img.resize((200, 200), Image.LANCZOS)
                     images[key] = ImageTk.PhotoImage(img)
                 else:
                     images[key] = self.create_placeholder(key)
@@ -100,56 +106,187 @@ class AnimatedQuizApp:
             except Exception as e:
                 print(f"Error playing sound {sound_name}: {e}")
 
+    def create_binary_rain_canvas(self, parent, width, height):
+        """Create a canvas with animated binary rain effect"""
+        # Use fixed dimensions if width/height are not properly initialized
+        if width < 100:
+            width = 800
+        if height < 100:
+            height = 600
+            
+        canvas = tk.Canvas(parent, width=width, height=height, bg=self.colors['bg_dark'], highlightthickness=0)
+        
+        # Spring green color for the binary digits
+        spring_green = "#4CAF50"
+        light_green = "#8BC34A"
+        
+        # Create binary digits (0s and 1s) - use fewer digits for better performance
+        self.rain_digits = []
+        for _ in range(50):  # Reduced number of falling digits
+            x = random.randint(0, width)
+            y = random.randint(-height, 0)  # Start above the canvas
+            digit = random.choice(["0", "1"])
+            color = random.choice([spring_green, light_green])
+            size = random.randint(10, 18)
+            speed = random.uniform(1, 3)  # Slightly slower for better performance
+            
+            text_id = canvas.create_text(
+                x, y, 
+                text=digit, 
+                font=("Courier", size, "bold"), 
+                fill=color
+            )
+            
+            self.rain_digits.append({
+                "id": text_id,
+                "speed": speed,
+                "max_y": height + 30  # When to reset position
+            })
+        
+        # Start the animation
+        self.animate_binary_rain(canvas, width, height)
+        
+        return canvas
+    
+    def animate_binary_rain(self, canvas, width, height):
+        """Animate the binary rain effect"""
+        try:
+            # Check if canvas still exists
+            if not canvas.winfo_exists():
+                return
+                
+            for digit in self.rain_digits:
+                try:
+                    # Move the digit down
+                    canvas.move(digit["id"], 0, digit["speed"])
+                    
+                    # Get current position
+                    pos = canvas.coords(digit["id"])
+                    if not pos:  # Skip if the item no longer exists
+                        continue
+                        
+                    # If the digit has moved below the canvas, reset its position
+                    if pos[1] > digit["max_y"]:
+                        # Reset to a random position above the canvas
+                        new_x = random.randint(0, width)
+                        new_y = random.randint(-100, -20)
+                        canvas.coords(digit["id"], new_x, new_y)
+                        
+                        # Randomly change the digit
+                        if random.random() > 0.5:
+                            canvas.itemconfig(digit["id"], text=random.choice(["0", "1"]))
+                except:
+                    continue  # Skip any digits that cause errors
+            
+            # Schedule the next animation frame (slower refresh rate)
+            self.root.after(100, lambda: self.animate_binary_rain(canvas, width, height))
+        except Exception as e:
+            print(f"Error in animate_binary_rain: {e}")
+
     def show_intro(self):
-        """Display animated intro screen"""
+        """Display animated intro screen with binary rain effect"""
         self.clear_screen()
         self.play_sound('welcome')
-        main_frame = tk.Frame(self.root, bg=self.colors['bg_medium'])
-        main_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
-        self.show_intro_content(main_frame)
+        
+        # Create a container for all elements
+        container = tk.Frame(self.root, bg=self.colors['bg_dark'])
+        container.place(x=0, y=0, relwidth=1, relheight=1)
+        
+        # Get the window dimensions - use fixed values if not available yet
+        width = self.root.winfo_width() or 800
+        height = self.root.winfo_height() or 600
+        
+        # Create the binary rain animation in the background
+        try:
+            rain_canvas = self.create_binary_rain_canvas(container, width, height)
+            rain_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+        except Exception as e:
+            print(f"Error creating binary rain: {e}")
+        
+        # Create a semi-transparent overlay for better text readability
+        overlay_frame = tk.Frame(container, bg=self.colors['bg_dark'], bd=0)
+        overlay_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
+        
+        # Add content to the overlay
+        self.show_intro_content(overlay_frame)
 
     def show_intro_content(self, frame):
-        """Show the content of the intro screen"""
+        """Show the content of the intro screen with a full-screen welcome image"""
+        # Create a container for the welcome image
+        image_container = tk.Frame(frame, bg=self.colors['bg_dark'])
+        image_container.pack(fill="both", expand=True)
+        
+        # Display the welcome image as a background
+        welcome_image_label = tk.Label(
+            image_container, 
+            image=self.images['welcome'], 
+            bg=self.colors['bg_dark']
+        )
+        welcome_image_label.pack(fill="both", expand=True)
+        
+        # Create a semi-transparent overlay for text and buttons
+        # Use a slightly transparent background by using a darker color
+        overlay_bg = '#1A1225'  # Darker version of bg_dark for better contrast
+        overlay = tk.Frame(image_container, bg=overlay_bg)
+        overlay.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.9, relheight=0.9)
+        
+        # Add a title at the top
         title_label = tk.Label(
-            frame, 
-            text="Welcome to the Quiz Application!", 
-            font=("Arial", 28, "bold"), 
-            bg=self.colors['bg_medium'], 
+            overlay, 
+            text="Python Quiz Master", 
+            font=("Arial", 36, "bold"), 
+            bg=overlay_bg, 
             fg=self.colors['text']
         )
-        title_label.pack(pady=20)
-
-        image_label = tk.Label(frame, image=self.images['welcome'], bg=self.colors['bg_medium'])
-        image_label.pack(pady=10)
-
+        title_label.pack(pady=(20, 10))
+        
+        # Add a subtitle
+        subtitle_label = tk.Label(
+            overlay, 
+            text="Test Your Knowledge • Challenge Your Mind • Become a Python Pro", 
+            font=("Arial", 16, "italic"), 
+            bg=overlay_bg, 
+            fg=self.colors['text_secondary']
+        )
+        subtitle_label.pack(pady=(0, 40))
+        
+        # Add a message
         message_text = tk.Label(
-            frame, 
-            text="Let's test your knowledge and have fun together!", 
+            overlay, 
+            text="Welcome to the ultimate Python Quiz Application!\n\nTest your knowledge across multiple topics, track your progress,\nand challenge yourself to become a Python expert.", 
             font=("Arial", 16), 
-            bg=self.colors['bg_medium'], 
+            bg=overlay_bg, 
             fg=self.colors['text'],
-            wraplength=500
+            justify=tk.CENTER
         )
         message_text.pack(pady=20)
-
-        button_frame = tk.Frame(frame, bg=self.colors['bg_medium'])
-        button_frame.pack(pady=20)
         
+        # Add a call to action
+        cta_label = tk.Label(
+            overlay, 
+            text="Are you ready to begin your journey?", 
+            font=("Arial", 18, "bold"), 
+            bg=overlay_bg, 
+            fg=self.colors['text']
+        )
+        cta_label.pack(pady=(20, 30))
+        
+        # Add a start button
         start_button = tk.Button(
-            button_frame, 
-            text="Start Quiz Adventure!", 
-            font=("Arial", 14, "bold"), 
+            overlay, 
+            text="Start Your Quiz Adventure!", 
+            font=("Arial", 16, "bold"), 
             bg=self.colors['button_primary'], 
             fg=self.colors['text'],
             activebackground=self.colors['button_secondary'], 
             activeforeground=self.colors['text'],
-            width=20, 
+            width=25, 
             height=2,
             relief=tk.RAISED,
             bd=3,
             command=self.build_login_screen
         )
-        start_button.pack(pady=10)
+        start_button.pack(pady=20)
 
     def pulse_button(self, button, size=1.0, growing=True):
         """Create a pulsing animation for buttons"""
@@ -172,6 +309,19 @@ class AnimatedQuizApp:
                 new_size = int(font_size * size)
                 if new_size > 0:  # Ensure font size is positive
                     button.config(font=(font_parts[0], new_size))
+                    
+            # Also pulse the button color slightly
+            if growing:
+                # Make button slightly brighter
+                r, g, b = button.winfo_rgb(button.cget("background"))
+                r = min(65535, int(r * 1.02))
+                g = min(65535, int(g * 1.02))
+                b = min(65535, int(b * 1.02))
+                button.config(background='#%04x%04x%04x' % (r, g, b))
+            else:
+                # Return to original color
+                button.config(background=self.colors['button_primary'])
+                
         except Exception as e:
             print(f"Error in pulse_button: {e}")
             
@@ -623,16 +773,22 @@ class AnimatedQuizApp:
         if self.rounds >= len(self.questions) or self.rounds >= 7:
             # Quiz is complete
             percentage_score = (self.score / self.rounds) * 100 if self.rounds > 0 else 0
-            self.play_sound('complete')
-            self.show_animation('happy', f"Quiz complete! Your score: {self.score}/{self.rounds} ({percentage_score:.2f}%)")
             
             # Save the score - get the topic from the database name
             topic_name = self.questions[0][6]  # This should be the topic name
             save_score(self.current_user, topic_name, percentage_score)
             
-            self.root.after(3000, self.show_menu)
+            # Show completion screen with confetti for high scores
+            if percentage_score >= 80:
+                self.play_sound('victory')
+                self.show_confetti_celebration(percentage_score)
+            else:
+                self.play_sound('complete')
+                self.show_quiz_completion(percentage_score)
+            
             return
-        
+            
+        # If we're still in the quiz, show the next question
         self.clear_screen()
         question_data = self.questions[self.rounds]
         
@@ -648,6 +804,7 @@ class AnimatedQuizApp:
             fg=self.colors['text']
         ).pack(pady=10)
         
+        # Display the question
         question_frame = tk.Frame(container, bg="white", bd=2, relief=tk.RAISED)
         question_frame.pack(pady=10, padx=20, fill="x")
         
@@ -686,6 +843,121 @@ class AnimatedQuizApp:
                 command=lambda a=answer: self.check_answer(a, question_data[1])
             )
             answer_button.pack(pady=5, fill="x")
+            
+    def show_confetti_celebration(self, percentage_score):
+        """Show a celebration screen with animated confetti for high scores"""
+        self.clear_screen()
+        
+        # Create a canvas for the confetti animation
+        canvas = tk.Canvas(self.root, bg=self.colors['bg_dark'], highlightthickness=0)
+        canvas.pack(fill="both", expand=True)
+        
+        # Update the canvas size
+        self.root.update()
+        canvas_width = canvas.winfo_width()
+        canvas_height = canvas.winfo_height()
+        
+        # Add congratulatory text
+        canvas.create_text(
+            canvas_width // 2, 
+            canvas_height // 3,
+            text=f"Congratulations!",
+            font=("Arial", 36, "bold"),
+            fill="#FFD700"  # Gold color
+        )
+        
+        canvas.create_text(
+            canvas_width // 2, 
+            canvas_height // 2,
+            text=f"Your score: {self.score}/{self.rounds} ({percentage_score:.2f}%)",
+            font=("Arial", 24),
+            fill=self.colors['text']
+        )
+        
+        # Create confetti particles
+        confetti_colors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF", "#FFA500", "#800080"]
+        confetti_particles = []
+        
+        for _ in range(100):  # Create 100 confetti particles
+            x = random.randint(0, canvas_width)
+            y = random.randint(-100, 0)
+            size = random.randint(5, 15)
+            color = random.choice(confetti_colors)
+            speed = random.uniform(1, 5)
+            angle = random.uniform(-0.5, 0.5)
+            
+            particle = canvas.create_rectangle(
+                x, y, x + size, y + size,
+                fill=color, outline=""
+            )
+            
+            confetti_particles.append({
+                'id': particle,
+                'x': x,
+                'y': y,
+                'size': size,
+                'speed': speed,
+                'angle': angle
+            })
+        
+        # Animate the confetti
+        def animate_confetti():
+            for particle in confetti_particles:
+                # Update position
+                particle['y'] += particle['speed']
+                particle['x'] += particle['angle']
+                
+                # Move the particle on canvas
+                canvas.move(
+                    particle['id'],
+                    particle['angle'],
+                    particle['speed']
+                )
+                
+                # Rotate the particle (by deleting and recreating)
+                if random.random() < 0.05:  # 5% chance to rotate each frame
+                    x = particle['x']
+                    y = particle['y']
+                    size = particle['size']
+                    color = canvas.itemcget(particle['id'], 'fill')
+                    
+                    canvas.delete(particle['id'])
+                    particle['id'] = canvas.create_rectangle(
+                        x, y, x + size, y + size,
+                        fill=color, outline=""
+                    )
+                
+                # Reset particles that fall off the screen
+                pos = canvas.coords(particle['id'])
+                if pos and len(pos) >= 2 and pos[1] > canvas_height:
+                    canvas.move(particle['id'], 0, -canvas_height - size)
+                    particle['y'] -= canvas_height
+            
+            # Continue animation if the canvas still exists
+            if canvas.winfo_exists():
+                self.root.after(50, animate_confetti)
+        
+        # Add a button to return to the menu
+        button_frame = tk.Frame(canvas, bg=self.colors['bg_dark'])
+        button_frame.place(relx=0.5, rely=0.8, anchor="center")
+        
+        menu_button = tk.Button(
+            button_frame,
+            text="Return to Menu",
+            font=("Arial", 14),
+            bg=self.colors['button_primary'],
+            fg=self.colors['text'],
+            command=self.show_menu
+        )
+        menu_button.pack(pady=10)
+        
+        # Start the animation
+        self.root.after(100, animate_confetti)
+    
+    def show_quiz_completion(self, percentage_score):
+        """Show a standard completion screen for normal scores"""
+        self.show_animation('happy', f"Quiz complete! Your score: {self.score}/{self.rounds} ({percentage_score:.2f}%)")
+        self.root.after(3000, self.show_menu)
 
     def check_answer(self, selected_answer, correct_answer):
         """Checks if the selected answer is correct"""
@@ -746,23 +1018,33 @@ class AnimatedQuizApp:
         self.play_sound('click')
         self.clear_screen()
         
-        container = tk.Frame(self.root, bg="#FFF8DC")
+        container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
         
-        tk.Label(container, text="Add New Question", font=("Arial", 24, "bold"), bg="#FFF8DC").pack(pady=10)
+        tk.Label(
+            container, 
+            text="Add New Question", 
+            font=("Arial", 24, "bold"), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(pady=10)
         
         # First step: Choose existing topic or create new one
-        choice_frame = tk.Frame(container, bg="#FFF8DC")
+        choice_frame = tk.Frame(container, bg=self.colors['bg_medium'])
         choice_frame.pack(pady=20, fill="x")
         
         choose_button = tk.Button(
             choice_frame,
             text="Choose Existing Topic",
             font=("Arial", 14),
-            bg="#4CAF50",
-            fg="white",
+            bg=self.colors['button_success'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_primary'],
+            activeforeground=self.colors['text'],
             padx=10,
             pady=5,
+            relief=tk.RAISED,
+            bd=2,
             command=lambda: self.choose_topic_for_question()
         )
         choose_button.pack(side=tk.LEFT, padx=10, expand=True)
@@ -771,10 +1053,14 @@ class AnimatedQuizApp:
             choice_frame,
             text="Create New Topic",
             font=("Arial", 14),
-            bg="#2196F3",
-            fg="white",
+            bg=self.colors['button_primary'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_secondary'],
+            activeforeground=self.colors['text'],
             padx=10,
             pady=5,
+            relief=tk.RAISED,
+            bd=2,
             command=lambda: self.create_topic_for_question()
         )
         create_button.pack(side=tk.LEFT, padx=10, expand=True)
@@ -783,8 +1069,12 @@ class AnimatedQuizApp:
             container,
             text="Back to Menu",
             font=("Arial", 12),
-            bg="#FF6347",
-            fg="white",
+            bg=self.colors['button_danger'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_primary'],
+            activeforeground=self.colors['text'],
+            relief=tk.RAISED,
+            bd=2,
             command=self.show_menu
         )
         back_button.pack(pady=20)
@@ -792,13 +1082,20 @@ class AnimatedQuizApp:
     def choose_topic_for_question(self):
         """Allows the user to choose an existing topic for a new question"""
         self.clear_screen()
+        self.play_sound('click')
         
-        container = tk.Frame(self.root, bg="#FFF8DC")
+        container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
         
-        tk.Label(container, text="Choose a Topic", font=("Arial", 24, "bold"), bg="#FFF8DC").pack(pady=10)
+        tk.Label(
+            container, 
+            text="Choose a Topic", 
+            font=("Arial", 24, "bold"), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(pady=10)
         
-        topics_frame = tk.Frame(container, bg="#FFF8DC")
+        topics_frame = tk.Frame(container, bg=self.colors['bg_medium'])
         topics_frame.pack(pady=20, fill="both", expand=True)
         
         # Get all topics
@@ -810,9 +1107,9 @@ class AnimatedQuizApp:
             return
         
         # Create a scrollable frame for topics
-        canvas = tk.Canvas(topics_frame, bg="#FFF8DC")
+        canvas = tk.Canvas(topics_frame, bg=self.colors['bg_medium'], highlightthickness=0)
         scrollbar = tk.Scrollbar(topics_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg="#FFF8DC")
+        scrollable_frame = tk.Frame(canvas, bg=self.colors['bg_medium'])
         
         scrollable_frame.bind(
             "<Configure>",
@@ -830,10 +1127,15 @@ class AnimatedQuizApp:
                 scrollable_frame,
                 text=display_name,
                 font=("Arial", 12),
-                bg="#E0E0E0",
+                bg=self.colors['bg_light'],
+                fg=self.colors['text'],
+                activebackground=self.colors['button_primary'],
+                activeforeground=self.colors['text'],
                 padx=10,
                 pady=5,
                 width=30,
+                relief=tk.RAISED,
+                bd=2,
                 command=lambda t=raw_name, d=display_name: self.question_form(t, d)
             )
             topic_button.pack(pady=5)
@@ -842,8 +1144,12 @@ class AnimatedQuizApp:
             container,
             text="Back",
             font=("Arial", 12),
-            bg="#FF6347",
-            fg="white",
+            bg=self.colors['button_danger'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_primary'],
+            activeforeground=self.colors['text'],
+            relief=tk.RAISED,
+            bd=2,
             command=self.add_new_question
         )
         back_button.pack(pady=10)
@@ -851,32 +1157,49 @@ class AnimatedQuizApp:
     def create_topic_for_question(self):
         """Interface for creating a new topic"""
         self.clear_screen()
+        self.play_sound('click')
         
-        container = tk.Frame(self.root, bg="#FFF8DC")
+        container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
         
-        tk.Label(container, text="Create New Topic", font=("Arial", 24, "bold"), bg="#FFF8DC").pack(pady=20)
+        tk.Label(
+            container, 
+            text="Create New Topic", 
+            font=("Arial", 24, "bold"), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(pady=20)
         
-        form_frame = tk.Frame(container, bg="#FFF8DC")
+        form_frame = tk.Frame(container, bg=self.colors['bg_medium'])
         form_frame.pack(pady=20, fill="x")
         
-        tk.Label(form_frame, text="Topic Name:", font=("Arial", 14), bg="#FFF8DC").pack(anchor="w", padx=20)
+        tk.Label(
+            form_frame, 
+            text="Topic Name:", 
+            font=("Arial", 14), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(anchor="w", padx=20)
         
         topic_var = tk.StringVar()
         topic_entry = tk.Entry(form_frame, textvariable=topic_var, font=("Arial", 12), width=40)
         topic_entry.pack(pady=10, padx=20, fill="x")
         
-        button_frame = tk.Frame(container, bg="#FFF8DC")
+        button_frame = tk.Frame(container, bg=self.colors['bg_medium'])
         button_frame.pack(pady=20)
         
         create_button = tk.Button(
             button_frame,
             text="Create Topic",
             font=("Arial", 14),
-            bg="#4CAF50",
-            fg="white",
+            bg=self.colors['button_success'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_primary'],
+            activeforeground=self.colors['text'],
             padx=10,
             pady=5,
+            relief=tk.RAISED,
+            bd=2,
             command=lambda: self.process_new_topic(topic_var.get())
         )
         create_button.pack(side=tk.LEFT, padx=10)
@@ -885,8 +1208,12 @@ class AnimatedQuizApp:
             button_frame,
             text="Back",
             font=("Arial", 12),
-            bg="#FF6347",
-            fg="white",
+            bg=self.colors['button_danger'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_primary'],
+            activeforeground=self.colors['text'],
+            relief=tk.RAISED,
+            bd=2,
             command=self.add_new_question
         )
         back_button.pack(side=tk.LEFT, padx=10)
@@ -908,15 +1235,21 @@ class AnimatedQuizApp:
         """Form for adding a new question to a topic"""
         self.clear_screen()
         
-        container = tk.Frame(self.root, bg="#FFF8DC")
+        container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
         
-        tk.Label(container, text=f"Add Question to {topic_display}", font=("Arial", 20, "bold"), bg="#FFF8DC").pack(pady=10)
+        tk.Label(
+            container, 
+            text=f"Add Question to {topic_display}", 
+            font=("Arial", 20, "bold"), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(pady=10)
         
         # Create a canvas with scrollbar for the form
-        canvas = tk.Canvas(container, bg="#FFF8DC")
+        canvas = tk.Canvas(container, bg=self.colors['bg_medium'], highlightthickness=0)
         scrollbar = tk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        form_frame = tk.Frame(canvas, bg="#FFF8DC")
+        form_frame = tk.Frame(canvas, bg=self.colors['bg_medium'])
         
         form_frame.bind(
             "<Configure>",
@@ -930,10 +1263,16 @@ class AnimatedQuizApp:
         scrollbar.pack(side="right", fill="y")
         
         # Difficulty selection
-        tk.Label(form_frame, text="Difficulty:", font=("Arial", 14), bg="#FFF8DC").pack(anchor="w", padx=20, pady=(10, 5))
+        tk.Label(
+            form_frame, 
+            text="Difficulty:", 
+            font=("Arial", 14), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(anchor="w", padx=20, pady=(10, 5))
         
         difficulty_var = tk.IntVar(value=1)
-        difficulty_frame = tk.Frame(form_frame, bg="#FFF8DC")
+        difficulty_frame = tk.Frame(form_frame, bg=self.colors['bg_medium'])
         difficulty_frame.pack(fill="x", padx=20, pady=5)
         
         difficulties = [("Easy", 1), ("Medium", 2), ("Hard", 3)]
@@ -944,51 +1283,107 @@ class AnimatedQuizApp:
                 variable=difficulty_var,
                 value=value,
                 font=("Arial", 12),
-                bg="#FFF8DC"
+                bg=self.colors['bg_medium'],
+                fg=self.colors['text'],
+                selectcolor=self.colors['bg_light'],
+                activebackground=self.colors['bg_light'],
+                activeforeground=self.colors['text']
             ).pack(side=tk.LEFT, padx=10)
         
-        # Question text
-        tk.Label(form_frame, text="Question:", font=("Arial", 14), bg="#FFF8DC").pack(anchor="w", padx=20, pady=(10, 5))
+        # Create a more compact layout with two columns
+        content_frame = tk.Frame(form_frame, bg=self.colors['bg_medium'])
+        content_frame.pack(padx=10, pady=5, fill="both", expand=True)
+        
+        # Left column for question and correct answer
+        left_column = tk.Frame(content_frame, bg=self.colors['bg_medium'])
+        left_column.pack(side=tk.LEFT, fill="both", expand=True, padx=5)
+        
+        # Right column for wrong answers
+        right_column = tk.Frame(content_frame, bg=self.colors['bg_medium'])
+        right_column.pack(side=tk.LEFT, fill="both", expand=True, padx=5)
+        
+        # Question text (left column)
+        tk.Label(
+            left_column, 
+            text="Question:", 
+            font=("Arial", 12), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(anchor="w", pady=(5, 2))
         
         question_var = tk.StringVar()
-        question_entry = tk.Entry(form_frame, textvariable=question_var, font=("Arial", 12), width=50)
-        question_entry.pack(padx=20, pady=5, fill="x")
+        question_frame = tk.Frame(left_column, bg=self.colors['bg_medium'])
+        question_frame.pack(pady=2, fill="x")
         
-        # Correct answer
-        tk.Label(form_frame, text="Correct Answer:", font=("Arial", 14), bg="#FFF8DC").pack(anchor="w", padx=20, pady=(10, 5))
+        question_entry = tk.Text(question_frame, font=("Arial", 10), height=2, width=40, wrap=tk.WORD)
+        question_entry.pack(fill="x", expand=True)
+        
+        # Correct answer (left column)
+        tk.Label(
+            left_column, 
+            text="Correct Answer:", 
+            font=("Arial", 12), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(anchor="w", pady=(5, 2))
         
         correct_var = tk.StringVar()
-        correct_entry = tk.Entry(form_frame, textvariable=correct_var, font=("Arial", 12), width=50)
-        correct_entry.pack(padx=20, pady=5, fill="x")
+        correct_frame = tk.Frame(left_column, bg=self.colors['bg_medium'])
+        correct_frame.pack(pady=2, fill="x")
         
-        # Wrong answers
-        wrong_vars = []
+        correct_entry = tk.Text(correct_frame, font=("Arial", 10), height=2, width=40, wrap=tk.WORD)
+        correct_entry.pack(fill="x", expand=True)
+        
+        # Wrong answers (right column)
+        wrong_entries = []
+        
+        # Add a header for the wrong answers column
+        tk.Label(
+            right_column, 
+            text="Wrong Answers:", 
+            font=("Arial", 12, "bold"), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(anchor="w", pady=(5, 10))
+        
         for i in range(4):
-            tk.Label(form_frame, text=f"Wrong Answer {i+1}:", font=("Arial", 14), bg="#FFF8DC").pack(anchor="w", padx=20, pady=(10, 5))
+            tk.Label(
+                right_column, 
+                text=f"Answer {i+1}:", 
+                font=("Arial", 12), 
+                bg=self.colors['bg_medium'],
+                fg=self.colors['text']
+            ).pack(anchor="w", pady=(5, 2))
             
-            wrong_var = tk.StringVar()
-            wrong_entry = tk.Entry(form_frame, textvariable=wrong_var, font=("Arial", 12), width=50)
-            wrong_entry.pack(padx=20, pady=5, fill="x")
-            wrong_vars.append(wrong_var)
+            wrong_frame = tk.Frame(right_column, bg=self.colors['bg_medium'])
+            wrong_frame.pack(pady=2, fill="x")
+            
+            wrong_entry = tk.Text(wrong_frame, font=("Arial", 10), height=2, width=40, wrap=tk.WORD)
+            wrong_entry.pack(fill="x", expand=True)
+            wrong_entries.append(wrong_entry)
         
         # Buttons
-        button_frame = tk.Frame(form_frame, bg="#FFF8DC")
+        button_frame = tk.Frame(form_frame, bg=self.colors['bg_medium'])
         button_frame.pack(pady=20)
         
         submit_button = tk.Button(
             button_frame,
             text="Submit Question",
             font=("Arial", 14),
-            bg="#4CAF50",
-            fg="white",
+            bg=self.colors['button_success'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_primary'],
+            activeforeground=self.colors['text'],
             padx=10,
             pady=5,
+            relief=tk.RAISED,
+            bd=2,
             command=lambda: self.submit_question(
                 topic_raw,
                 difficulty_var.get(),
-                question_var.get(),
-                correct_var.get(),
-                [var.get() for var in wrong_vars]
+                question_entry.get("1.0", tk.END).strip(),
+                correct_entry.get("1.0", tk.END).strip(),
+                [entry.get("1.0", tk.END).strip() for entry in wrong_entries]
             )
         )
         submit_button.pack(side=tk.LEFT, padx=10)
@@ -997,8 +1392,12 @@ class AnimatedQuizApp:
             button_frame,
             text="Back",
             font=("Arial", 12),
-            bg="#FF6347",
-            fg="white",
+            bg=self.colors['button_danger'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_primary'],
+            activeforeground=self.colors['text'],
+            relief=tk.RAISED,
+            bd=2,
             command=lambda: self.choose_topic_for_question()
         )
         back_button.pack(side=tk.LEFT, padx=10)
@@ -1022,67 +1421,175 @@ class AnimatedQuizApp:
         self.play_sound('click')
         self.clear_screen()
         
-        container = tk.Frame(self.root, bg="#FFF8DC")
+        container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
         
-        tk.Label(container, text="Available Topics", font=("Arial", 24, "bold"), bg="#FFF8DC").pack(pady=20)
+        # Header
+        header_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        header_frame.pack(pady=10, fill="x")
         
-        topics_frame = tk.Frame(container, bg="#FFFFFF", bd=2, relief=tk.RAISED)
-        topics_frame.pack(pady=20, padx=20, fill="both", expand=True)
+        tk.Label(
+            header_frame, 
+            text="Available Topics", 
+            font=("Arial", 24, "bold"), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(pady=10)
+        
+        # Create a canvas with scrollbar for the topics
+        canvas_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        canvas_frame.pack(pady=10, padx=20, fill="both", expand=True)
+        
+        canvas = tk.Canvas(canvas_frame, bg=self.colors['bg_light'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        
+        topics_frame = tk.Frame(canvas, bg=self.colors['bg_light'], bd=2, relief=tk.RAISED)
+        
+        # Configure the canvas
+        topics_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=topics_frame, anchor="nw", width=canvas.winfo_reqwidth())
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack the canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
         
         # Get all topics
         topic_mapping = get_topics()
         
         if not topic_mapping:
-            tk.Label(topics_frame, text="No topics available.", font=("Arial", 16), bg="#FFFFFF").pack(pady=20)
+            tk.Label(
+                topics_frame, 
+                text="No topics available.", 
+                font=("Arial", 16), 
+                bg=self.colors['bg_light'],
+                fg=self.colors['text']
+            ).pack(pady=20, padx=20)
         else:
-            for i, display_name in enumerate(topic_mapping.keys(), 1):
-                tk.Label(
-                    topics_frame,
+            # Create a two-column layout for topics
+            left_column = tk.Frame(topics_frame, bg=self.colors['bg_light'])
+            left_column.pack(side=tk.LEFT, fill="both", expand=True, padx=10, pady=10)
+            
+            right_column = tk.Frame(topics_frame, bg=self.colors['bg_light'])
+            right_column.pack(side=tk.LEFT, fill="both", expand=True, padx=10, pady=10)
+            
+            # Split topics between the two columns
+            topic_list = list(topic_mapping.keys())
+            half_point = len(topic_list) // 2 + len(topic_list) % 2  # Ceiling division
+            
+            # Left column topics
+            for i, display_name in enumerate(topic_list[:half_point], 1):
+                topic_label = tk.Label(
+                    left_column,
                     text=f"{i}. {display_name}",
-                    font=("Arial", 16),
-                    bg="#FFFFFF",
-                    anchor="w"
-                ).pack(pady=10, padx=20, fill="x")
+                    font=("Arial", 14),
+                    bg=self.colors['bg_light'],
+                    fg=self.colors['text'],
+                    anchor="w",
+                    padx=10
+                )
+                topic_label.pack(pady=8, fill="x")
+            
+            # Right column topics
+            for i, display_name in enumerate(topic_list[half_point:], half_point + 1):
+                topic_label = tk.Label(
+                    right_column,
+                    text=f"{i}. {display_name}",
+                    font=("Arial", 14),
+                    bg=self.colors['bg_light'],
+                    fg=self.colors['text'],
+                    anchor="w",
+                    padx=10
+                )
+                topic_label.pack(pady=8, fill="x")
+        
+        # Footer with back button
+        footer_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        footer_frame.pack(pady=10, fill="x")
         
         back_button = tk.Button(
-            container,
+            footer_frame,
             text="Back to Menu",
             font=("Arial", 12),
-            bg="#FF6347",
-            fg="white",
+            bg=self.colors['button_primary'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_secondary'],
+            activeforeground=self.colors['text'],
+            relief=tk.RAISED,
+            bd=2,
             command=self.show_menu
         )
-        back_button.pack(pady=20)
+        back_button.pack(pady=10)
 
     def delete_topics(self):
         """Interface for deleting topics"""
         self.play_sound('click')
         self.clear_screen()
         
-        container = tk.Frame(self.root, bg="#FFF8DC")
+        container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
         
-        tk.Label(container, text="Delete Topics", font=("Arial", 24, "bold"), bg="#FFF8DC").pack(pady=20)
+        # Header
+        header_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        header_frame.pack(pady=10, fill="x")
         
-        topics_frame = tk.Frame(container, bg="#FFFFFF", bd=2, relief=tk.RAISED)
-        topics_frame.pack(pady=20, padx=20, fill="both", expand=True)
+        tk.Label(
+            header_frame, 
+            text="Delete Topics", 
+            font=("Arial", 24, "bold"), 
+            bg=self.colors['bg_medium'],
+            fg=self.colors['text']
+        ).pack(pady=10)
+        
+        # Create a canvas with scrollbar for the topics
+        canvas_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        canvas_frame.pack(pady=10, padx=20, fill="both", expand=True)
+        
+        canvas = tk.Canvas(canvas_frame, bg=self.colors['bg_light'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        
+        topics_frame = tk.Frame(canvas, bg=self.colors['bg_light'], bd=2, relief=tk.RAISED)
+        
+        # Configure the canvas
+        topics_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=topics_frame, anchor="nw", width=canvas.winfo_reqwidth())
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack the canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
         
         # Get all topics
         topic_mapping = get_topics()
         
         if not topic_mapping:
-            tk.Label(topics_frame, text="No topics available to delete.", font=("Arial", 16), bg="#FFFFFF").pack(pady=20)
+            tk.Label(
+                topics_frame, 
+                text="No topics available to delete.", 
+                font=("Arial", 16), 
+                bg=self.colors['bg_light'],
+                fg=self.colors['text']
+            ).pack(pady=20, padx=20)
         else:
+            # Single column layout for delete topics
             for display_name, raw_name in topic_mapping.items():
-                topic_frame = tk.Frame(topics_frame, bg="#FFFFFF")
+                topic_frame = tk.Frame(topics_frame, bg=self.colors['bg_light'])
                 topic_frame.pack(pady=5, padx=10, fill="x")
                 
                 tk.Label(
                     topic_frame,
                     text=display_name,
                     font=("Arial", 14),
-                    bg="#FFFFFF",
+                    bg=self.colors['bg_light'],
+                    fg=self.colors['text'],
                     anchor="w"
                 ).pack(side=tk.LEFT, padx=10)
                 
@@ -1090,21 +1597,33 @@ class AnimatedQuizApp:
                     topic_frame,
                     text="Delete",
                     font=("Arial", 12),
-                    bg="#F44336",
-                    fg="white",
+                    bg=self.colors['button_danger'],
+                    fg=self.colors['text'],
+                    activebackground=self.colors['button_primary'],
+                    activeforeground=self.colors['text'],
+                    relief=tk.RAISED,
+                    bd=2,
                     command=lambda t=display_name: self.confirm_delete_topic(t)
                 )
                 delete_button.pack(side=tk.RIGHT, padx=10)
         
+        # Footer with back button
+        footer_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        footer_frame.pack(pady=10, fill="x")
+        
         back_button = tk.Button(
-            container,
+            footer_frame,
             text="Back to Menu",
             font=("Arial", 12),
-            bg="#FF6347",
-            fg="white",
+            bg=self.colors['button_primary'],
+            fg=self.colors['text'],
+            activebackground=self.colors['button_secondary'],
+            activeforeground=self.colors['text'],
+            relief=tk.RAISED,
+            bd=2,
             command=self.show_menu
         )
-        back_button.pack(pady=20)
+        back_button.pack(pady=10)
 
     def confirm_delete_topic(self, topic_name):
         """Confirms deletion of a topic"""
@@ -1127,13 +1646,17 @@ class AnimatedQuizApp:
         container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
         
+        # Header
+        header_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        header_frame.pack(pady=10, fill="x")
+        
         tk.Label(
-            container, 
+            header_frame, 
             text="View Topic Questions", 
             font=("Arial", 24, "bold"), 
             bg=self.colors['bg_medium'],
             fg=self.colors['text']
-        ).pack(pady=20)
+        ).pack(pady=10)
         
         # Get all topics
         topic_mapping = get_topics()
@@ -1143,36 +1666,90 @@ class AnimatedQuizApp:
             self.root.after(1500, self.show_menu)
             return
         
-        topics_frame = tk.Frame(container, bg=self.colors['bg_medium'])
-        topics_frame.pack(pady=20, fill="both", expand=True)
+        # Create a canvas with scrollbar for the topics
+        canvas_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        canvas_frame.pack(pady=10, padx=20, fill="both", expand=True)
         
-        for display_name, raw_name in topic_mapping.items():
+        canvas = tk.Canvas(canvas_frame, bg=self.colors['bg_light'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        
+        topics_frame = tk.Frame(canvas, bg=self.colors['bg_light'], bd=2, relief=tk.RAISED)
+        
+        # Configure the canvas
+        topics_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        canvas.create_window((0, 0), window=topics_frame, anchor="nw", width=canvas.winfo_reqwidth())
+        canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # Pack the canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Create a two-column layout for topics
+        left_column = tk.Frame(topics_frame, bg=self.colors['bg_light'])
+        left_column.pack(side=tk.LEFT, fill="both", expand=True, padx=10, pady=10)
+        
+        right_column = tk.Frame(topics_frame, bg=self.colors['bg_light'])
+        right_column.pack(side=tk.LEFT, fill="both", expand=True, padx=10, pady=10)
+        
+        # Split topics between the two columns
+        topic_items = list(topic_mapping.items())
+        half_point = len(topic_items) // 2 + len(topic_items) % 2  # Ceiling division
+        
+        # Left column topics
+        for display_name, raw_name in topic_items[:half_point]:
             topic_button = tk.Button(
-                topics_frame,
+                left_column,
                 text=display_name,
-                font=("Arial", 14),
+                font=("Arial", 12),
                 bg=self.colors['button_primary'],
                 fg=self.colors['text'],
                 activebackground=self.colors['button_secondary'],
                 activeforeground=self.colors['text'],
-                padx=10,
-                pady=5,
-                width=20,
+                padx=5,
+                pady=3,
+                width=15,
                 command=lambda t=raw_name, d=display_name: self.show_topic_questions(t, d)
             )
-            topic_button.pack(pady=10)
+            topic_button.pack(pady=5, fill="x")
+        
+        # Right column topics
+        for display_name, raw_name in topic_items[half_point:]:
+            topic_button = tk.Button(
+                right_column,
+                text=display_name,
+                font=("Arial", 12),
+                bg=self.colors['button_primary'],
+                fg=self.colors['text'],
+                activebackground=self.colors['button_secondary'],
+                activeforeground=self.colors['text'],
+                padx=5,
+                pady=3,
+                width=15,
+                command=lambda t=raw_name, d=display_name: self.show_topic_questions(t, d)
+            )
+            topic_button.pack(pady=5, fill="x")
+        
+        # Footer with back button
+        footer_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        footer_frame.pack(pady=10, fill="x")
         
         back_button = tk.Button(
-            container,
+            footer_frame,
             text="Back to Menu",
             font=("Arial", 12),
-            bg=self.colors['button_danger'],
+            bg=self.colors['button_primary'],
             fg=self.colors['text'],
             activebackground=self.colors['button_secondary'],
             activeforeground=self.colors['text'],
+            relief=tk.RAISED,
+            bd=2,
             command=self.show_menu
         )
-        back_button.pack(pady=20)
+        back_button.pack(pady=10)
 
     def show_topic_questions(self, topic, display_name):
         """Shows all questions for a specific topic"""
