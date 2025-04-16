@@ -209,20 +209,25 @@ class AnimatedQuizApp:
         
         # Add content to the overlay
         self.show_intro_content(overlay_frame)
+        
+        # We'll rely on the button click to go to login screen
 
     def show_intro_content(self, frame):
-        """Show the content of the intro screen with a full-screen welcome image"""
-        # Create a container for the welcome image
+        """Show the content of the intro screen with binary rain effect and welcome image"""
+        # Create a container for the welcome image and content
         image_container = tk.Frame(frame, bg=self.colors['bg_dark'])
         image_container.pack(fill="both", expand=True)
         
         # Display the welcome image as a background
-        welcome_image_label = tk.Label(
-            image_container, 
-            image=self.images['welcome'], 
-            bg=self.colors['bg_dark']
-        )
-        welcome_image_label.pack(fill="both", expand=True)
+        try:
+            welcome_image_label = tk.Label(
+                image_container, 
+                image=self.images['welcome'], 
+                bg=self.colors['bg_dark']
+            )
+            welcome_image_label.place(x=0, y=0, relwidth=1, relheight=1)
+        except Exception as e:
+            print(f"Error displaying welcome image: {e}")
         
         # Create a semi-transparent overlay for text and buttons
         # Use a slightly transparent background by using a darker color
@@ -288,6 +293,13 @@ class AnimatedQuizApp:
         )
         start_button.pack(pady=20)
 
+    def direct_to_menu(self):
+        """Directly go to the menu screen without login"""
+        print("direct_to_menu called")
+        self.current_user = "Guest"  # Set a default user
+        messagebox.showinfo("Debug", "Going directly to menu as Guest user")
+        self.show_menu()
+        
     def pulse_button(self, button, size=1.0, growing=True):
         """Create a pulsing animation for buttons"""
         if not button.winfo_exists():
@@ -343,8 +355,7 @@ class AnimatedQuizApp:
         )
         title_label.pack(pady=10)
 
-        image_label = tk.Label(container, image=self.images['welcome'], bg=self.colors['bg_medium'])
-        image_label.pack(pady=10)
+        # No welcome image
 
         message_text = tk.Label(
             container, 
@@ -476,19 +487,38 @@ class AnimatedQuizApp:
         self.play_sound('click')
         username = self.username_var.get()
         password = self.password_var.get()
-        self.show_animation('thinking', "Let me check your credentials...")
-        self.root.after(1500, lambda: self.process_login(username, password))
+        
+        # Attempt to log in
+        result = login_user(username, password)
+        
+        if result:
+            self.current_user = username  # Store logged-in user
+            messagebox.showinfo("Success", f"Welcome, {username}!", parent=self.root)  # Show success message
+            self.show_menu()  # Show the main menu
+        else:
+            self.play_sound('wrong')
+            messagebox.showerror("Login Failed", "Invalid username or password.", parent=self.root)  # Show error message
+            
+            # Ask if the user wants to see the password hint
+            response = messagebox.askyesno("Password Hint", "Do you want to see the password hint?", parent=self.root)
+            if response:  # User clicked Yes
+                hint = get_password_hint(username)  # Fetch the password hint
+                if hint:
+                    messagebox.showinfo("Password Hint", f"Your password hint is: {hint}", parent=self.root)
+                else:
+                    messagebox.showinfo("Password Hint", "No password hint set for this account.", parent=self.root)
 
     def process_login(self, username, password):
         result = login_user(username, password)
         if result:
             self.current_user = username
             self.play_sound('correct')
-            self.show_animation('happy', f"Welcome back, {username}! It's great to see you again!")
+            self.show_animation('happy', f"Welcome back, {username}! It's great to see you again!", self.show_menu)
             self.root.after(2000, self.show_menu)
         else:
             self.play_sound('wrong')
-            self.show_animation('sad', "Oops! I couldn't find those credentials. Would you like to see your password hint?")
+            self.show_animation('sad', "Oops! I couldn't find those credentials. Would you like to see your password hint?", 
+                               lambda: self.ask_for_hint(username))
             self.root.after(2000, lambda: self.ask_for_hint(username))
             
     def ask_for_hint(self, username):
@@ -498,11 +528,12 @@ class AnimatedQuizApp:
             self.show_password_hint(username)
         else:
             # If user doesn't want to see the hint, suggest registration
-            self.show_animation('sad', "If you don't have an account yet, please register to start your quiz adventure!")
+            self.show_animation('sad', "If you don't have an account yet, please register to start your quiz adventure!", 
+                               self.build_login_screen)
             self.root.after(2000, self.build_login_screen)
 
-    def show_animation(self, emotion, message):
-        """Show animation with a message"""
+    def show_animation(self, emotion, message, next_action=None):
+        """Show animation with a message and optional next action button"""
         self.clear_screen()
         frame = tk.Frame(self.root, bg=self.colors['bg_medium'])
         frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.8, relheight=0.8)
@@ -515,10 +546,7 @@ class AnimatedQuizApp:
             bg=self.colors['bg_medium'], 
             fg=self.colors['text']
         )
-        title_label.pack(pady=10)
-
-        image_label = tk.Label(frame, image=self.images[emotion], bg=self.colors['bg_medium'])
-        image_label.pack(pady=10)
+        title_label.pack(pady=20)
 
         message_text = tk.Label(
             frame, 
@@ -529,6 +557,26 @@ class AnimatedQuizApp:
             wraplength=500
         )
         message_text.pack(pady=20)
+        
+        # Add a continue button if there's no next_action scheduled
+        if next_action is None:
+            continue_button = tk.Button(
+                frame,
+                text="Continue",
+                font=("Arial", 14, "bold"),
+                bg=self.colors['button_primary'],
+                fg=self.colors['text'],
+                activebackground=self.colors['button_secondary'],
+                activeforeground=self.colors['text'],
+                padx=10,
+                pady=5,
+                width=15,
+                height=1,
+                relief=tk.RAISED,
+                bd=3,
+                command=self.show_menu
+            )
+            continue_button.pack(pady=20)
 
     def clear_screen(self):
         """Clear all widgets from the root window"""
@@ -551,60 +599,63 @@ class AnimatedQuizApp:
             else:
                 hint = ""
 
-        self.show_animation('thinking', "Creating your new account...")
-        self.root.after(1500, lambda: self.process_registration(username, password, hint))
+        # Skip animation and directly process registration
+        if register_user(username, password, hint):
+            self.current_user = username
+            self.play_sound('correct')
+            messagebox.showinfo("Registration Successful", f"Welcome, {username}! Your account has been created successfully!", parent=self.root)
+            self.show_menu()
+        else:
+            self.play_sound('wrong')
+            messagebox.showerror("Registration Failed", "Could not register your account. The username might already be taken.", parent=self.root)
 
     def process_registration(self, username, password, hint):
         if register_user(username, password, hint):
             self.current_user = username
             self.play_sound('correct')
-            self.show_animation('happy', f"Welcome, {username}! Your account has been created successfully!")
+            self.show_animation('happy', f"Welcome, {username}! Your account has been created successfully!", 
+                               self.show_menu)
             self.root.after(2000, self.show_menu)
         else:
             self.play_sound('wrong')
-            self.show_animation('sad', "I couldn't register your account. The username might already be taken.")
+            self.show_animation('sad', "I couldn't register your account. The username might already be taken.", 
+                               self.build_login_screen)
             self.root.after(2000, self.build_login_screen)
 
     def show_menu(self):
-        """Displays the main menu options with animations."""
+        """Displays the main menu options."""
         self.clear_screen()
         self.play_sound('click')
-
+        
+        # Create a container with the themed background
         container = tk.Frame(self.root, bg=self.colors['bg_medium'])
         container.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.9, relheight=0.9)
-
-        header_frame = tk.Frame(container, bg=self.colors['bg_medium'])
-        header_frame.pack(fill="x", pady=10)
-
-        image_label = tk.Label(header_frame, image=self.images['happy'], bg=self.colors['bg_medium'])
-        image_label.pack(side=tk.LEFT, padx=20)
-
-        text_frame = tk.Frame(header_frame, bg=self.colors['bg_medium'])
-        text_frame.pack(side=tk.LEFT, padx=20, fill="both", expand=True)
-
-        tk.Label(
-            text_frame, 
-            text=f"Welcome, {self.current_user}!", 
+        
+        # Add a title
+        title_label = tk.Label(
+            container, 
+            text="Quiz Application Menu", 
             font=("Arial", 24, "bold"), 
             bg=self.colors['bg_medium'], 
             fg=self.colors['text']
-        ).pack(anchor="w")
+        )
+        title_label.pack(pady=20)
         
-        tk.Label(
-            text_frame, 
-            text="What would you like to do today?", 
-            font=("Arial", 16), 
+        # Add a welcome message
+        welcome_label = tk.Label(
+            container, 
+            text=f"Welcome, {self.current_user}!", 
+            font=("Arial", 18), 
             bg=self.colors['bg_medium'], 
             fg=self.colors['text']
-        ).pack(anchor="w")
-
+        )
+        welcome_label.pack(pady=10)
+        
+        # Create a frame for the menu buttons
         menu_frame = tk.Frame(container, bg=self.colors['bg_medium'])
         menu_frame.pack(pady=20, fill="both", expand=True)
-
-        menu_frame.columnconfigure(0, weight=1)
-        menu_frame.columnconfigure(1, weight=1)
-
-        # Define menu options with consistent colors from our theme
+        
+        # Define menu options
         menu_buttons = [
             ("Take a quiz", self.select_topic, self.colors['button_primary']),
             ("Add new questions", self.add_new_question, self.colors['button_primary']),
@@ -617,10 +668,9 @@ class AnimatedQuizApp:
             ("Who is the winner?", self.view_winner, self.colors['highlight']),
             ("Exit", self.root.quit, self.colors['button_danger']),
         ]
-
-        # Create all buttons at once instead of using animation
-        for index, (text, command, color) in enumerate(menu_buttons):
-            row, col = divmod(index, 2)
+        
+        # Create all buttons
+        for text, command, color in menu_buttons:
             button = tk.Button(
                 menu_frame,
                 text=text,
@@ -630,14 +680,12 @@ class AnimatedQuizApp:
                 fg=self.colors['text'],
                 activebackground=self.colors['button_secondary'],
                 activeforeground=self.colors['text'],
-                padx=10,
-                pady=5,
-                width=20,
-                height=2,
+                width=25,
+                height=1,
                 relief=tk.RAISED,
-                bd=3
+                bd=2
             )
-            button.grid(row=row, column=col, padx=20, pady=10, sticky="nsew")
+            button.pack(pady=5)
 
     # Implemented menu action methods
     def select_topic(self):
@@ -658,8 +706,8 @@ class AnimatedQuizApp:
         
         topic_mapping = get_topics()
         if not topic_mapping:
-            self.show_animation('sad', "No topics available. Please add some topics first!")
-            self.root.after(2000, self.show_menu)
+            messagebox.showinfo("No Topics", "No topics available. Please add some topics first!", parent=self.root)
+            self.show_menu()
             return
         
         topics_frame = tk.Frame(container, bg=self.colors['bg_medium'])
@@ -755,8 +803,8 @@ class AnimatedQuizApp:
         questions = get_questions(topic, difficulty)
         
         if not questions:
-            self.show_animation('sad', f"No questions available for this topic with difficulty level {difficulty}.")
-            self.root.after(2000, lambda: self.select_difficulty(topic, topic.capitalize()))
+            messagebox.showinfo("No Questions", f"No questions available for this topic with difficulty level {difficulty}.", parent=self.root)
+            self.select_difficulty(topic, topic.capitalize())
             return
         
         # Shuffle and limit questions
@@ -1889,8 +1937,8 @@ class AnimatedQuizApp:
         self.username_var.set("")
         self.password_var.set("")
         self.hint_var.set("")
-        self.show_animation('happy', "You have been logged out successfully!")
-        self.root.after(1500, self.build_login_screen)
+        messagebox.showinfo("Logout", "You have been logged out successfully!", parent=self.root)
+        self.build_login_screen()
 
     def view_my_scores(self):
         """Displays the current user's scores"""

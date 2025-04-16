@@ -88,7 +88,7 @@ def main():
         subprocess.call([sys.executable, "scripts/animated_gui_new.py"])
     elif choice == "2":
         print("\nLaunching Command Line Version...")
-        subprocess.call([sys.executable, "scripts/main.py"])
+        subprocess.call([sys.executable, "scripts/gui_app.pyq"])
     else:
         print("Invalid choice. Please run the script again and select 1 or 2.")
 
