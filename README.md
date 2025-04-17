@@ -1,33 +1,150 @@
-# Command Line Quiz
+# Python Quiz Master
 
-In this project, you will create a quiz application that will allow users to test their knowledge on various topics. Also to enrich the topics and questions that are provided. The application will use command line input and output to communicate with the user.
+An interactive quiz application with an animated GUI that tests your knowledge across multiple topics.
 
-#### Prerequisites:
-- Basic SQL
-- Command line input and output. 
-- Using variables, operators and control flow structures, conditionals while loops.
-- Use postgresql from python and query the database. 
+![Python Quiz Master](images/welcome.png)
 
-By the end of this project, you will have gained experience in these areas and created a fully functional command line quiz application.
+## Features
 
+- Beautiful animated interface with binary rain effect
+- Multiple quiz topics (Languages, History, Literature, etc.)
+- User authentication system
+- Score tracking and leaderboards
+- Add, view, and delete quiz topics and questions
+- Difficulty levels for questions
 
-### Implementetion Feautures
+## Requirements
 
-1. The application will prompt the user with an initial menu where they can select to be tested on an existing topic or enter a new topic/new question or exit. 
+- Python 3.8+
+- PostgreSQL database
+- Required Python packages:
+  - tkinter
+  - pygame
+  - psycopg2
+  - PIL (Pillow)
 
-2. If the user selects to be tested on an existing topic, the application will randomly select a specific number of questions (hardcoded in the code) from the corresponding table in the PostgreSQL database. Each question will be displayed one by one, along with a number of possible answers (3 to 6). The user will select the answer they believe is correct, and the application will move on to the next question. After the last question is answered, the user's total score will be displayed.
+## Installation
 
-3. The questions will be stored and retrieved from the PostgreSQL database. For each main topic, there will be a separate table with entries for the module, submodule, difficulty level (1, 2, or 3), question, right answer, and 2-5 wrong answers. The choices will be displayed shuffled and the questions will be chosen in random.
+1. Clone the repository:
 
-4. If the user selects to add additional questions, they will choose the main topic, and a new table will be created. They will then be prompted to enter each field in sequence, including the question, the correct answer, and 2-5 wrong answers. Once all fields are entered, the user will have the option to store the question. If the topic already exists, the user can simply add questions to the existing table.
+   ```
+   git clone https://github.com/YourUsername/project-databases-command-line-quiz-AleenDam.git
+   cd project-databases-command-line-quiz-AleenDam
+   ```
 
+2. Install the required packages:
 
-#### Extra Features (Optional):
+   ```
+   pip install pygame psycopg2-binary pillow
+   ```
 
-- **Database Indexing**: Index columns such as `difficulty_level` for faster query performance if necessary.
-- **Extend Features**: Add user management to allow users to create accounts and track their quiz progress over time.
-- **Deploy**: Host the PostgreSQL server on a cloud platform and make the quiz available via a terminal or web interface.
-- **Add graphical user interface**: Transform your application into a graphical user interface using any of Python's GUI applications such as Tkinter, PyGT, Kivy etc.
+3. Set up the PostgreSQL database:
 
----
+   - Create a database named 'quiz_db'
+   - Update the database connection details in `scripts/db.py` if needed
 
+4. Generate sound files (optional):
+
+   ```
+   python scripts/create_sounds.py
+   ```
+
+5. Generate welcome image (optional):
+   ```
+   python scripts/create_welcome_image.py
+   ```
+
+## Running the Application
+
+### Using the Launcher Script (Recommended)
+
+```
+python run.py
+```
+
+This launcher script will:
+
+- Check for required dependencies and offer to install them
+- Generate sound files and welcome image if they don't exist
+- Let you choose between the GUI and command-line versions
+
+### Animated GUI Version (Alternative)
+
+```
+python scripts/animated_gui_new.py
+```
+
+### Command Line Version
+
+```
+python scripts/main.py
+```
+
+## Usage
+
+1. Register a new account or login with existing credentials
+2. From the main menu, select an option:
+   - Take a quiz
+   - Add new questions
+   - View all topics
+   - Delete topics
+   - Display questions from a topic
+   - View scores
+   - And more!
+
+## Project Structure
+
+- `scripts/` - Contains all Python scripts
+  - `animated_gui_new.py` - Main GUI application
+  - `main.py` - Command-line interface
+  - `auth.py` - Authentication functions
+  - `db.py` - Database connection
+  - `questions.py` - Question management
+  - `quiz_functions.py` - Core quiz functionality
+  - `create_sounds.py` - Generates sound effects
+  - `create_welcome_image.py` - Creates welcome image
+- `images/` - Contains images used in the application
+- `sounds/` - Contains sound effects
+
+## Running Online
+
+You can run this application online using GitHub Codespaces:
+
+1. Go to the GitHub repository
+2. Click on the "Code" button
+3. Select the "Codespaces" tab
+4. Click "Create codespace on main"
+5. Once the codespace is ready, run:
+   ```
+   python run.py
+   ```
+
+This will automatically check for dependencies, create necessary resources, and let you choose which version to run.
+
+### GitHub Pages Demo
+
+You can also view a demo of the application on GitHub Pages:
+
+1. Go to: https://yourusername.github.io/project-databases-command-line-quiz-AleenDam/
+2. This will show a web-based demonstration of the application's features
+
+## Original Project Requirements
+
+### Implementation Features
+
+1. The application prompts the user with an initial menu where they can select to be tested on an existing topic or enter a new topic/new question or exit.
+
+2. If the user selects to be tested on an existing topic, the application randomly selects questions from the PostgreSQL database. Each question is displayed with multiple possible answers. The user selects the answer they believe is correct, and after all questions are answered, the user's total score is displayed.
+
+3. The questions are stored and retrieved from the PostgreSQL database. For each main topic, there is a separate table with entries for difficulty level (1, 2, or 3), question, right answer, and wrong answers.
+
+4. Users can add additional questions by choosing the main topic and entering each field in sequence, including the question, the correct answer, and wrong answers.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Created by AleenDam
+- Special thanks to DCI for the project inspiration
