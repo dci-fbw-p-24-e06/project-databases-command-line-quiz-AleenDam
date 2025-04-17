@@ -2,5 +2,5 @@ psycopg2
 matplotlib
 numpy==1.19.5
 
-
+psql -h localhost -U aleen
 

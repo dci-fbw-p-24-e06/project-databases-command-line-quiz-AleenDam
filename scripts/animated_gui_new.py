@@ -710,9 +710,33 @@ class AnimatedQuizApp:
             self.show_menu()
             return
         
-        topics_frame = tk.Frame(container, bg=self.colors['bg_medium'])
-        topics_frame.pack(pady=20, fill="both", expand=True)
+        # Create a frame for the scrollable area
+        scroll_frame = tk.Frame(container, bg=self.colors['bg_medium'])
+        scroll_frame.pack(pady=10, fill="both", expand=True)
         
+        # Create a canvas with scrollbar for the topics
+        canvas = tk.Canvas(scroll_frame, bg=self.colors['bg_light'], highlightthickness=0)
+        scrollbar = tk.Scrollbar(scroll_frame, orient="vertical", command=canvas.yview)
+        
+        # Create a frame inside the canvas to hold the topics
+        topics_frame = tk.Frame(canvas, bg=self.colors['bg_light'], bd=2, relief=tk.RAISED)
+        
+        # Configure the canvas
+        topics_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        # Set a fixed width for the canvas window
+        canvas_width = 400  # Fixed width for the topics area
+        canvas.create_window((0, 0), window=topics_frame, anchor="nw", width=canvas_width)
+        canvas.configure(yscrollcommand=scrollbar.set, width=canvas_width)
+        
+        # Pack the canvas and scrollbar
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Add the topic buttons to the scrollable frame
         for i, (display_name, raw_name) in enumerate(topic_mapping.items()):
             topic_button = tk.Button(
                 topics_frame,
@@ -727,7 +751,19 @@ class AnimatedQuizApp:
                 width=20,
                 command=lambda t=raw_name, d=display_name: self.select_difficulty(t, d)
             )
-            topic_button.pack(pady=10)
+            topic_button.pack(pady=10, padx=20, fill="x")
+            
+            # Print debug info
+            print(f"Added topic button: {display_name}")
+        
+        # Bind mousewheel to the canvas for scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        
+        # Update the canvas to ensure it shows the content
+        topics_frame.update_idletasks()
+        canvas.config(scrollregion=canvas.bbox("all"))
         
         back_button = tk.Button(
             container,
@@ -739,7 +775,7 @@ class AnimatedQuizApp:
             activeforeground=self.colors['text'],
             command=self.show_menu
         )
-        back_button.pack(pady=20)
+        back_button.pack(pady=10)
 
     def select_difficulty(self, topic, display_name):
         """Allows the user to select a difficulty level for the quiz"""
